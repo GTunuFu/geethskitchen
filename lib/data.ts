@@ -26,6 +26,7 @@ export type Ask = {
   cookedAt: string | null;
   createdAt: string;
   options: number[];
+  photoId: number | null;
 };
 
 export type Req = {
@@ -108,6 +109,7 @@ export async function getState(): Promise<AppState> {
     cookedAt: a.cooked_at,
     createdAt: a.created_at,
     options: optRows.filter((o: any) => o.ask_id === a.id).map((o: any) => o.dish_id),
+    photoId: a.photo_id,
   }));
 
   const requests: Req[] = reqRows.map((r: any) => ({

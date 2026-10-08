@@ -12,6 +12,13 @@ async function saveImage(data?: string | null) {
   return row.id as number;
 }
 
+// A plate photo becomes the dish's picture if the dish has none yet (or if the chef asks for it).
+async function useAsDishPhoto(dishId: number | null | undefined, photoId: number | null, force?: boolean) {
+  if (!dishId || !photoId) return;
+  if (force) await db()`update dishes set image_id = ${photoId} where id = ${dishId}`;
+  else await db()`update dishes set image_id = ${photoId} where id = ${dishId} and image_id is null`;
+}
+
 const clean = (v: unknown, max = 2000) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
 const mealWord = (m: string) => (m === "lunch" ? "lunch" : "dinner");
 
@@ -92,15 +99,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "cooked": {
-        await s`update asks set status = 'cooked', cooked_at = now() where id = ${body.askId}`;
-        const [a] = await s`select a.meal, d.name from asks a left join dishes d on d.id = a.picked_dish_id where a.id = ${body.askId}`;
-        await notify("her", { title: "⭐ How was it?", body: `Rate tonight's ${a?.name || mealWord(a?.meal)} — the chef is nervously waiting.`, url: "/her", tag: `rate-${body.askId}` });
+        const photoId = await saveImage(body.image);
+        await s`update asks set status = 'cooked', cooked_at = now(), photo_id = ${photoId} where id = ${body.askId}`;
+        const [a] = await s`select a.meal, a.picked_dish_id, d.name from asks a left join dishes d on d.id = a.picked_dish_id where a.id = ${body.askId}`;
+        await useAsDishPhoto(a?.picked_dish_id, photoId, body.setDishPhoto);
+        await notify("her", { title: photoId ? "📸 Dinner is served! How was it?" : "⭐ How was it?", body: `Rate tonight's ${a?.name || mealWord(a?.meal)} — the chef is nervously waiting.`, url: "/her", tag: `rate-${body.askId}` });
         return NextResponse.json({ ok: true });
       }
       case "cookDirect": {
         const [d] = await s`select name, meal from dishes where id = ${body.dishId}`;
         const meal = body.meal || (d?.meal === "lunch" ? "lunch" : "dinner");
-        const [a] = await s`insert into asks (meal, status, picked_dish_id, picked_at, cooked_at) values (${meal}, 'cooked', ${body.dishId}, now(), now()) returning id`;
+        const photoId = await saveImage(body.image);
+        const [a] = await s`insert into asks (meal, status, picked_dish_id, picked_at, cooked_at, photo_id) values (${meal}, 'cooked', ${body.dishId}, now(), now(), ${photoId}) returning id`;
+        await useAsDishPhoto(body.dishId, photoId, body.setDishPhoto);
         await s`insert into ask_options (ask_id, dish_id) values (${a.id}, ${body.dishId})`;
         await notify("her", { title: "⭐ How was it?", body: `Rate the ${d?.name} — the chef is nervously waiting.`, url: "/her", tag: `rate-${a.id}` });
         return NextResponse.json({ ok: true });

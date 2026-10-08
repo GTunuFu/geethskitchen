@@ -33,6 +33,7 @@ export default function ChefApp({ herName }: { herName: string }) {
   const [askMeal, setAskMeal] = useState<Meal | null>(null);
   const [editing, setEditing] = useState<Dish | "new" | null>(null);
   const [viewing, setViewing] = useState<Dish | null>(null);
+  const [serving, setServing] = useState<{ askId?: number; dish?: Dish } | null>(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export default function ChefApp({ herName }: { herName: string }) {
           <div className="section center muted">Preheating…</div>
         ) : (
           <>
-            {tab === "home" && <Home state={state} herName={herName} onAsk={setAskMeal} run={run} goInbox={() => setTab("inbox")} />}
+            {tab === "home" && <Home state={state} herName={herName} onAsk={setAskMeal} run={run} goInbox={() => setTab("inbox")} onServe={setServing} />}
             {tab === "menu" && <MenuTab state={state} onAdd={() => setEditing("new")} onView={setViewing} />}
             {tab === "inbox" && <Inbox state={state} herName={herName} run={run} onAsk={setAskMeal} />}
             {tab === "stats" && <Stats state={state} herName={herName} />}
@@ -128,12 +129,10 @@ export default function ChefApp({ herName }: { herName: string }) {
           state={state}
           onClose={() => setViewing(null)}
           onEdit={() => setEditing(viewing)}
-          onCooked={() =>
-            run(async () => {
-              await act("cookDirect", { dishId: viewing.id });
-              setViewing(null);
-            }, `Asked ${herName} for a rating ⭐`)
-          }
+          onCooked={() => {
+            setServing({ dish: state.dishes.find((d) => d.id === viewing.id) || viewing });
+            setViewing(null);
+          }}
           onArchive={() =>
             run(async () => {
               await act("archiveDish", { id: viewing.id, archived: !viewing.archived });
@@ -142,13 +141,59 @@ export default function ChefApp({ herName }: { herName: string }) {
           }
         />
       )}
+      {serving && (
+        <ServeSheet
+          dish={serving.dish}
+          herName={herName}
+          onClose={() => setServing(null)}
+          onSend={(image, setDishPhoto) =>
+            run(async () => {
+              if (serving.askId) await act("cooked", { askId: serving.askId, image, setDishPhoto });
+              else await act("cookDirect", { dishId: serving.dish?.id, image, setDishPhoto });
+              setServing(null);
+            }, `Served! Asked ${herName} to rate it ⭐`, true)
+          }
+        />
+      )}
       {toast.node}
     </>
   );
 }
 
+/* ============ SERVE (snap the plate) ============ */
+function ServeSheet({ dish, herName, onClose, onSend }: { dish?: Dish; herName: string; onClose: () => void; onSend: (image: string | null, setDishPhoto: boolean) => Promise<void> }) {
+  const [image, setImage] = useState<string | null>(null);
+  const hasPhoto = !!dish?.imageId;
+  const [setDishPhoto, setSetDishPhoto] = useState(!hasPhoto);
+  const [busy, setBusy] = useState(false);
+  const send = async (img: string | null) => {
+    setBusy(true);
+    await onSend(img, img ? setDishPhoto : false);
+    setBusy(false);
+  };
+  return (
+    <Sheet open onClose={onClose} title="Order up! 🛎️">
+      <div className="stack">
+        <p style={{ margin: 0, fontWeight: 700 }}>
+          Snap the plate before {herName} digs in. It goes on her rating card{hasPhoto ? "" : ` and becomes the photo for ${dish?.name || "this dish"}`}.
+        </p>
+        <PhotoPicker value={image} onChange={setImage} label="📸 Snap the plate" />
+        {image && hasPhoto && (
+          <label className="row" style={{ fontWeight: 800, cursor: "pointer" }}>
+            <input type="checkbox" checked={setDishPhoto} onChange={(e) => setSetDishPhoto(e.target.checked)} style={{ width: 22, height: 22, accentColor: "var(--tomato)" }} />
+            Use this as the new photo for {dish?.name}
+          </label>
+        )}
+        <button className="btn tomato block huge" disabled={busy} onClick={() => send(image)}>
+          {busy ? "Plating…" : image ? "Serve it ⭐" : "Serve without a photo"}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 /* ============ HOME ============ */
-function Home({ state, herName, onAsk, run, goInbox }: { state: ClientState; herName: string; onAsk: (m: Meal) => void; run: any; goInbox: () => void }) {
+function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientState; herName: string; onAsk: (m: Meal) => void; run: any; goInbox: () => void; onServe: (s: { askId: number; dish?: Dish }) => void }) {
   const live = state.asks.filter((a) => ["open", "picked", "requested", "cooked"].includes(a.status));
   const dish = (id: number | null) => state.dishes.find((d) => d.id === id);
   const lastRating = state.ratings[0];
@@ -178,7 +223,7 @@ function Home({ state, herName, onAsk, run, goInbox }: { state: ClientState; her
         ) : (
           <div className="stack">
             {live.map((a) => (
-              <LiveAsk key={a.id} ask={a} herName={herName} dish={dish} run={run} req={state.requests.find((r) => r.askId === a.id)} goInbox={goInbox} onAsk={onAsk} />
+              <LiveAsk key={a.id} ask={a} herName={herName} dish={dish} run={run} req={state.requests.find((r) => r.askId === a.id)} goInbox={goInbox} onAsk={onAsk} onServe={onServe} />
             ))}
           </div>
         )}
@@ -199,7 +244,7 @@ function Home({ state, herName, onAsk, run, goInbox }: { state: ClientState; her
   );
 }
 
-function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk }: { ask: Ask; herName: string; dish: (id: number | null) => Dish | undefined; run: any; req?: Req; goInbox: () => void; onAsk: (m: Meal) => void }) {
+function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk, onServe }: { ask: Ask; herName: string; dish: (id: number | null) => Dish | undefined; run: any; req?: Req; goInbox: () => void; onAsk: (m: Meal) => void; onServe: (s: { askId: number; dish?: Dish }) => void }) {
   const picked = dish(ask.pickedDishId);
   const meal = ask.meal.toUpperCase();
   if (ask.status === "open")
@@ -224,7 +269,7 @@ function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk }: { ask: Ask; h
             <h3>She wants<br />{picked?.name}! 🎉</h3>
           </div>
         </div>
-        <button className="btn tomato block" style={{ marginTop: 14 }} onClick={() => run(() => act("cooked", { askId: ask.id }), `Served! Asked ${herName} to rate it ⭐`, true)}>
+        <button className="btn tomato block" style={{ marginTop: 14 }} onClick={() => onServe({ askId: ask.id, dish: picked })}>
           Served! Ask for a rating ⭐
         </button>
       </div>
@@ -247,6 +292,10 @@ function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk }: { ask: Ask; h
   return (
     <div className="banner mint">
       <span className="pill" style={{ background: "#fff", color: "var(--ink)" }}>{meal} · served {timeAgo(ask.cookedAt)}</span>
+      {ask.photoId && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/img/${ask.photoId}`} alt="" style={{ marginTop: 10, borderRadius: 16, border: "3px solid var(--ink)", maxHeight: 200, width: "100%", objectFit: "cover" }} />
+      )}
       <h3 style={{ marginTop: 10 }}>Awaiting the verdict… 🥁</h3>
       <p>{picked?.name}: rating requested</p>
     </div>
@@ -425,7 +474,7 @@ function DishDetail({ dish, state, onClose, onEdit, onCooked, onArchive }: { dis
             ))}
           </div>
         )}
-        <button className="btn mint block" onClick={onCooked}>Just cooked this → ask for rating ⭐</button>
+        <button className="btn mint block" onClick={onCooked}>📸 Just cooked this → ask for rating</button>
         <div className="row">
           <button className="btn white grow" onClick={onEdit}>✏️ Edit</button>
           <button className="btn white grow" onClick={onArchive}>{dish.archived ? "↩︎ Restore" : "🪦 Archive"}</button>

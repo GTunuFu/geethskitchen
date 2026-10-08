@@ -275,8 +275,15 @@ function RateCard({ ask, dish, run }: { ask: Ask; dish?: Dish; run: any }) {
 
   return (
     <div className="card pad stack" style={{ background: "var(--paper)" }}>
+      {ask.photoId && (
+        <div style={{ position: "relative" }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/img/${ask.photoId}`} alt="Tonight's plate" style={{ borderRadius: 18, border: "3px solid var(--ink)", width: "100%", maxHeight: 300, objectFit: "cover" }} />
+          <span className="pill" style={{ position: "absolute", top: 10, left: 10, background: "var(--tomato)", color: "#fff", transform: "rotate(-5deg)" }}>📸 fresh off the stove</span>
+        </div>
+      )}
       <div className="row">
-        {dish && <DishArt dish={dish} className="mini-ph" />}
+        {dish && !ask.photoId && <DishArt dish={dish} className="mini-ph" />}
         <div className="grow">
           <span className="pill" style={{ background: "var(--butter)" }}>rate your {ask.meal}</span>
           <div className="display" style={{ fontSize: 22, marginTop: 6 }}>{dish?.name || "Your meal"}</div>

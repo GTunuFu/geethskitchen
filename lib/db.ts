@@ -71,6 +71,7 @@ create table if not exists ratings (
   note text,
   created_at timestamptz default now()
 );
+alter table asks add column if not exists photo_id int references images(id);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,
