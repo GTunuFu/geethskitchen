@@ -58,6 +58,16 @@ export type Rating = {
 
 export type FlavorScore = { flavor: string; score: number; loves: number; nopes: number; n: number };
 
+export type EatOut = {
+  id: number;
+  meal: string | null;
+  place: string | null;
+  note: string | null;
+  status: "pending" | "accepted" | "declined" | "cancelled";
+  createdAt: string;
+  decidedAt: string | null;
+};
+
 export type AppState = {
   dishes: Dish[];
   asks: Ask[];
@@ -65,12 +75,15 @@ export type AppState = {
   ratings: Rating[];
   flavors: FlavorScore[];
   chefAvg: number | null;
+  eatOuts: EatOut[];
+  eatOutTotal: number;
+  eatOutMonth: number;
 };
 
 export async function getState(): Promise<AppState> {
   await ready();
   const s = db();
-  const [dishRows, askRows, optRows, reqRows, ratingRows] = await Promise.all([
+  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts] = await Promise.all([
     s`
       select d.*,
         (select count(*) from asks a where a.picked_dish_id = d.id and a.status in ('cooked','rated'))::int as times_cooked,
@@ -82,7 +95,14 @@ export async function getState(): Promise<AppState> {
     s`select ao.* from ask_options ao join (select id from asks order by created_at desc limit 40) a on a.id = ao.ask_id`,
     s`select * from requests order by created_at desc limit 40`,
     s`select r.*, d.name as dish_name from ratings r left join dishes d on d.id = r.dish_id order by r.created_at desc limit 200`,
+    s`select * from eat_outs order by created_at desc limit 30`,
+    s`select count(*)::int as total,
+        count(*) filter (where decided_at >= date_trunc('month', now() at time zone 'America/New_York') at time zone 'America/New_York')::int as month
+      from eat_outs where status = 'accepted'`,
   ]);
+  const eatOuts: EatOut[] = eatRows.map((e: any) => ({
+    id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at,
+  }));
 
   const dishes: Dish[] = dishRows.map((d: any) => ({
     id: d.id,
@@ -169,5 +189,5 @@ export async function getState(): Promise<AppState> {
   const chefRatings = ratings.filter((r) => r.chefStars);
   const chefAvg = chefRatings.length ? chefRatings.reduce((t, r) => t + (r.chefStars || 0), 0) / chefRatings.length : null;
 
-  return { dishes, asks, requests, ratings, flavors, chefAvg };
+  return { dishes, asks, requests, ratings, flavors, chefAvg, eatOuts, eatOutTotal: eatCounts[0].total, eatOutMonth: eatCounts[0].month };
 }

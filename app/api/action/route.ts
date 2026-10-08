@@ -29,8 +29,8 @@ export async function POST(req: Request) {
   const s = db();
   const body = await req.json();
   const t = body.type as string;
-  const chefOnly = ["addDish", "updateDish", "archiveDish", "ask", "cancelAsk", "cooked", "cookDirect", "requestStatus"];
-  const herOnly = ["pick", "request", "rate"];
+  const chefOnly = ["addDish", "updateDish", "archiveDish", "ask", "cancelAsk", "cooked", "cookDirect", "requestStatus", "decideEatOut"];
+  const herOnly = ["pick", "request", "rate", "eatOut", "cancelEatOut"];
   if (chefOnly.includes(t) && role !== "chef") return NextResponse.json({ error: "chef only" }, { status: 403 });
   if (herOnly.includes(t) && role !== "her") return NextResponse.json({ error: "not for the chef" }, { status: 403 });
 
@@ -93,6 +93,35 @@ export async function POST(req: Request) {
         const what = kind === "recipe" ? "sent you a recipe 📖" : `wants ${clean(body.text, 80) || clean(body.cuisine, 60) || "something else"}`;
         await notify("chef", { title: `${HER_NAME} ${what}`, body: kind === "recipe" ? clean(body.text, 80) || "Check your inbox, chef." : `For ${body.meal || "the next meal"}. Back to the kitchen!`, url: "/chef?tab=inbox" });
         return NextResponse.json({ ok: true });
+      }
+      case "eatOut": {
+        const meal = body.meal === "lunch" ? "lunch" : body.meal === "dinner" ? "dinner" : null;
+        await s`update eat_outs set status = 'cancelled' where status = 'pending'`;
+        await s`insert into eat_outs (meal, place, note) values (${meal}, ${clean(body.place, 120)}, ${clean(body.note, 300)})`;
+        const where = clean(body.place, 80);
+        await notify("chef", {
+          title: `🍽️ ${HER_NAME} wants to eat out${meal ? ` for ${meal}` : ""}!`,
+          body: where ? `She's thinking ${where}. Accept or put your apron on?` : "Accept or put your apron on?",
+          url: "/chef",
+          tag: "eatout",
+        });
+        return NextResponse.json({ ok: true });
+      }
+      case "cancelEatOut": {
+        await s`update eat_outs set status = 'cancelled' where id = ${body.id} and status = 'pending'`;
+        return NextResponse.json({ ok: true });
+      }
+      case "decideEatOut": {
+        const accept = !!body.accept;
+        const [e] = await s`update eat_outs set status = ${accept ? "accepted" : "declined"}, decided_at = now()
+          where id = ${body.id} and status = 'pending' returning *`;
+        if (!e) return NextResponse.json({ error: "That request is already handled" }, { status: 400 });
+        if (accept && e.meal) await s`update asks set status = 'closed' where meal = ${e.meal} and status in ('open', 'requested')`;
+        const [c] = await s`select count(*)::int as n from eat_outs where status = 'accepted'`;
+        await notify("her", accept
+          ? { title: "🎉 We're eating out!", body: `${e.place ? `${e.place} it is. ` : ""}Eat-out counter: ${c.n}`, url: "/her", tag: "eatout" }
+          : { title: "👨‍🍳 Chef says: I'm cooking!", body: "Request denied. A menu is coming your way.", url: "/her", tag: "eatout" });
+        return NextResponse.json({ ok: true, count: c.n });
       }
       case "requestStatus": {
         await s`update requests set status = ${body.status} where id = ${body.id}`;

@@ -72,6 +72,15 @@ create table if not exists ratings (
   created_at timestamptz default now()
 );
 alter table asks add column if not exists photo_id int references images(id);
+create table if not exists eat_outs (
+  id serial primary key,
+  meal text,
+  place text,
+  note text,
+  status text not null default 'pending',
+  created_at timestamptz default now(),
+  decided_at timestamptz
+);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

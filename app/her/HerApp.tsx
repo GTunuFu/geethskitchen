@@ -12,6 +12,7 @@ import {
   Masthead,
   PhotoPicker,
   PushCard,
+  EatOutCounter,
   SectionTitle,
   Sheet,
   Splash,
@@ -164,6 +165,8 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
         <h3 style={{ fontSize: 28 }}>{greet},<br />{herName}! 💖</h3>
         <p>Your personal chef is standing by.</p>
       </div>
+
+      <EatOutCard state={state} herName={herName} run={run} />
 
       <PushCard who="her" />
 
@@ -468,6 +471,69 @@ function Diary({ state }: { state: ClientState }) {
             {r.note && <p style={{ margin: "6px 0 0" }}>&ldquo;{r.note}&rdquo;</p>}
           </div>
         ))
+      )}
+    </div>
+  );
+}
+
+/* ============ EAT OUT ============ */
+function EatOutCard({ state, herName, run }: { state: ClientState; herName: string; run: any }) {
+  const [open, setOpen] = useState(false);
+  const [meal, setMeal] = useState<"lunch" | "dinner">(new Date().getHours() < 15 ? "lunch" : "dinner");
+  const [place, setPlace] = useState("");
+  const [note, setNote] = useState("");
+  const pending = state.eatOuts.find((e) => e.status === "pending");
+  const recent = state.eatOuts.find((e) => (e.status === "accepted" || e.status === "declined") && e.decidedAt && Date.now() - new Date(e.decidedAt).getTime() < 12 * 3600 * 1000);
+
+  return (
+    <div className="stack" style={{ gap: 10 }}>
+      <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
+      {pending ? (
+        <div className="banner" style={{ background: "var(--grape)" }}>
+          <h3>Eat-out request sent 🍽️</h3>
+          <p>{pending.place ? `${pending.place}? ` : ""}Waiting on the chef&apos;s verdict…</p>
+          <button className="btn small white" style={{ marginTop: 10 }} onClick={() => run(() => act("cancelEatOut", { id: pending.id }), "Request cancelled")}>Never mind</button>
+        </div>
+      ) : recent ? (
+        <div className={`banner ${recent.status === "accepted" ? "mint" : "yellow"}`}>
+          <h3>{recent.status === "accepted" ? "We're eating out! 🎉" : "Chef says he's cooking 👨‍🍳"}</h3>
+          <p>{recent.status === "accepted" ? (recent.place ? `${recent.place} it is.` : "Pick somewhere good.") : "Keep an eye out for a menu."}</p>
+        </div>
+      ) : (
+        <button className="btn block" style={{ background: "var(--grape)", color: "#fff" }} onClick={() => setOpen(true)}>
+          🍽️ Let&apos;s eat out?
+        </button>
+      )}
+      {open && (
+        <Sheet open onClose={() => setOpen(false)} title="Let's eat out?">
+          <div className="stack">
+            <div className="seg">
+              <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
+              <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
+            </div>
+            <div className="field">
+              <label>Where? (optional)</label>
+              <input className="input" placeholder="That ramen place on 2nd Ave" value={place} onChange={(e) => setPlace(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Your case (optional)</label>
+              <input className="input" placeholder="You deserve a night off 💋" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+            <button
+              className="btn tomato block huge"
+              onClick={() =>
+                run(async () => {
+                  await act("eatOut", { meal, place, note });
+                  setOpen(false);
+                  setPlace("");
+                  setNote("");
+                }, "Asked the chef 🙏", true)
+              }
+            >
+              Ask the chef 🙏
+            </button>
+          </div>
+        </Sheet>
       )}
     </div>
   );

@@ -405,3 +405,14 @@ export async function logout() {
   await fetch("/api/logout", { method: "POST" });
   location.href = "/";
 }
+
+/* ---------------- eat-out counter ---------------- */
+export function EatOutCounter({ total, month }: { total: number; month: number }) {
+  return (
+    <div className="eatout-counter">
+      <div className="eo-label display">Eat-out<br />counter</div>
+      <div className="eo-num display">{total}</div>
+      <div className="eo-sub">{month} this month</div>
+    </div>
+  );
+}

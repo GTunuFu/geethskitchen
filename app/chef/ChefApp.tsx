@@ -12,6 +12,7 @@ import {
   Masthead,
   PhotoPicker,
   PushCard,
+  EatOutCounter,
   SectionTitle,
   Sheet,
   starText,
@@ -197,6 +198,7 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
   const live = state.asks.filter((a) => ["open", "picked", "requested", "cooked"].includes(a.status));
   const dish = (id: number | null) => state.dishes.find((d) => d.id === id);
   const lastRating = state.ratings[0];
+  const pendingEat = state.eatOuts.find((e) => e.status === "pending");
   const hour = new Date().getHours();
 
   return (
@@ -210,11 +212,24 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
             <span>🍝<br />Ask about<br />dinner</span>
           </button>
         </div>
+        <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
         <PushCard who="chef" />
       </div>
 
       <div className="section">
         <SectionTitle tag="LIVE">On the pass</SectionTitle>
+        {pendingEat && (
+          <div className="banner" style={{ background: "var(--grape)", marginBottom: 14 }}>
+            <span className="pill" style={{ background: "#fff" }}>{pendingEat.meal || "eat out"} · {timeAgo(pendingEat.createdAt)}</span>
+            <h3 style={{ marginTop: 10 }}>{herName} wants to eat out! 🍽️</h3>
+            {pendingEat.place && <p>Thinking: <b>{pendingEat.place}</b></p>}
+            {pendingEat.note && <p>&ldquo;{pendingEat.note}&rdquo;</p>}
+            <div className="row wrap" style={{ marginTop: 12 }}>
+              <button className="btn mint" onClick={() => run(() => act("decideEatOut", { id: pendingEat.id, accept: true }), `Eat-out counter: ${state.eatOutTotal + 1} 🍽️`, true)}>✓ Let&apos;s go (+1)</button>
+              <button className="btn white" onClick={() => run(() => act("decideEatOut", { id: pendingEat.id, accept: false }), "Apron on. Send her a menu!")}>I&apos;m cooking 👨‍🍳</button>
+            </div>
+          </div>
+        )}
         {live.length === 0 ? (
           <div className="empty">
             <div className="big">🧑‍🍳</div>
@@ -580,6 +595,7 @@ function Stats({ state, herName }: { state: ClientState; herName: string }) {
         <Stat n={avg ? avg.toFixed(1) : "–"} label="avg dish" bg="var(--pink)" />
         <Stat n={cooked} label="meals served" bg="var(--mint)" />
       </div>
+      <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
 
       <div className="card pad stack" style={{ gap: 10 }}>
         <div className="display" style={{ fontSize: 20 }}>Flavor report 🧪</div>
