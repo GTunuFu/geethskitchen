@@ -13,8 +13,12 @@ function sign(value: string, key: string) {
   return crypto.createHmac("sha256", key).update(value).digest("hex");
 }
 
+// Keep only digits so stray spaces, quotes or line breaks pasted into Vercel don't break login.
+export const digits = (v: unknown) => String(v ?? "").replace(/[^0-9]/g, "");
+
 export function pinFor(role: Role) {
-  return role === "chef" ? process.env.CHEF_PIN || "1111" : process.env.HER_PIN || "2222";
+  const raw = role === "chef" ? process.env.CHEF_PIN : process.env.HER_PIN;
+  return digits(raw) || (role === "chef" ? "1111" : "2222");
 }
 
 export async function setSession(role: Role) {
