@@ -1,0 +1,14 @@
+{
+  "name": "GK Chef — Geeth's Kitchen",
+  "short_name": "GK Chef",
+  "id": "/chef",
+  "start_url": "/chef",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffd23f",
+  "theme_color": "#1a1110",
+  "icons": [
+    { "src": "/icons/chef-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/chef-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
