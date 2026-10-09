@@ -42,6 +42,11 @@ export default function ChefApp({ herName }: { herName: string }) {
     if (t) setTab(t);
   }, []);
 
+  const hungerId = state?.hunger?.id;
+  useEffect(() => {
+    if (hungerId) setTimeout(() => boingAll({ geeth: "Yes chef!!", her: "STRANGRY!!" }), 500);
+  }, [hungerId]);
+
   const newReqs = state?.requests.filter((r) => r.status === "new").length || 0;
 
   const run = async (fn: () => Promise<unknown>, msg?: string, celebrate = false) => {
@@ -218,6 +223,17 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
 
       <div className="section">
         <SectionTitle tag="LIVE">On the pass</SectionTitle>
+        {state.hunger && (
+          <div className="banner" style={{ background: "var(--tomato)", color: "#fff", marginBottom: 14 }}>
+            <span className="pill" style={{ background: "#fff", color: "var(--ink)" }}>🚨 hangry alert · {timeAgo(state.hunger.createdAt)}</span>
+            <h3 style={{ marginTop: 10 }}>{herName} is HUNGRY!!</h3>
+            <p>The Dumpling Lollipop is getting Hangry…. or even…. Strangry!!!</p>
+            <div className="row wrap" style={{ marginTop: 12 }}>
+              <button className="btn" onClick={() => onAsk("lunch")}>🍱 Send lunch menu</button>
+              <button className="btn white" onClick={() => onAsk("dinner")}>🍝 Send dinner menu</button>
+            </div>
+          </div>
+        )}
         {pendingEat && (
           <div className="banner" style={{ background: "var(--grape)", marginBottom: 14 }}>
             <span className="pill" style={{ background: "#fff" }}>{pendingEat.meal || "eat out"} · {timeAgo(pendingEat.createdAt)}</span>
@@ -579,6 +595,63 @@ function RequestCard({ r, herName, run, onAsk }: { r: Req; herName: string; run:
 
 /* ============ STATS ============ */
 function Stats({ state, herName }: { state: ClientState; herName: string }) {
+  const [view, setView] = useState<"scores" | "history">("scores");
+  return (
+    <>
+      <div className="section" style={{ paddingBottom: 0 }}>
+        <div className="seg">
+          <button className={view === "scores" ? "on" : ""} onClick={() => setView("scores")}>⭐ Scores</button>
+          <button className={view === "history" ? "on" : ""} onClick={() => setView("history")}>📜 History</button>
+        </div>
+      </div>
+      {view === "scores" ? <Scores state={state} herName={herName} /> : <History state={state} />}
+    </>
+  );
+}
+
+function History({ state }: { state: ClientState }) {
+  const items = state.history;
+  let lastMonth = "";
+  return (
+    <div className="section stack">
+      <SectionTitle tag={`${items.length} MEALS`}>Food history</SectionTitle>
+      {items.length === 0 ? (
+        <div className="empty"><div className="big">📜</div><p>Every meal you serve (and every night out) shows up here.</p></div>
+      ) : (
+        items.map((m) => {
+          const d = new Date(m.at);
+          const month = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+          const header = month !== lastMonth ? (lastMonth = month) : null;
+          return (
+            <div key={`${m.kind}-${m.id}`} className="stack" style={{ gap: 10 }}>
+              {header && <div className="pill" style={{ background: "var(--ink)", color: "var(--butter)", alignSelf: "flex-start", fontSize: 12, padding: "5px 12px" }}>{header}</div>}
+              <div className="card list-dish" style={m.kind === "out" ? { background: "#efe6ff" } : undefined}>
+                {m.kind === "out" ? (
+                  <div className="thumb" style={{ background: "var(--grape)" }}>🍽️</div>
+                ) : m.photoId ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <div className="thumb"><img src={`/api/img/${m.photoId}`} alt="" loading="lazy" /></div>
+                ) : (
+                  <div className="thumb" style={{ background: "var(--butter)" }}>{cuisineEmoji(m.cuisine)}</div>
+                )}
+                <div className="grow">
+                  <div className="muted" style={{ fontWeight: 800 }}>
+                    {d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {m.kind === "out" ? `ate out${m.meal ? ` · ${m.meal}` : ""}` : m.meal}
+                  </div>
+                  <div className="display" style={{ fontSize: 16, marginTop: 2 }}>{m.name}</div>
+                  {m.stars ? <div className="stars-static">{starText(m.stars)}</div> : m.kind === "meal" ? <div className="muted">not rated yet</div> : null}
+                  {m.note && <div style={{ fontSize: 13, marginTop: 2 }}>&ldquo;{m.note}&rdquo;</div>}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function Scores({ state, herName }: { state: ClientState; herName: string }) {
   const rated = state.ratings;
   const avg = rated.length ? rated.reduce((t, r) => t + r.stars, 0) / rated.length : null;
   const cooked = state.asks.filter((a) => a.status === "cooked" || a.status === "rated").length;

@@ -68,6 +68,19 @@ export type EatOut = {
   decidedAt: string | null;
 };
 
+export type HistoryItem = {
+  kind: "meal" | "out";
+  id: number;
+  at: string;
+  meal: string | null;
+  name: string;
+  cuisine: string | null;
+  dishId: number | null;
+  photoId: number | null;
+  stars: number | null;
+  note: string | null;
+};
+
 export type AppState = {
   dishes: Dish[];
   asks: Ask[];
@@ -78,12 +91,14 @@ export type AppState = {
   eatOuts: EatOut[];
   eatOutTotal: number;
   eatOutMonth: number;
+  hunger: { id: number; createdAt: string } | null;
+  history: HistoryItem[];
 };
 
 export async function getState(): Promise<AppState> {
   await ready();
   const s = db();
-  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts] = await Promise.all([
+  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts, hungerRows, mealRows, outRows] = await Promise.all([
     s`
       select d.*,
         (select count(*) from asks a where a.picked_dish_id = d.id and a.status in ('cooked','rated'))::int as times_cooked,
@@ -99,6 +114,13 @@ export async function getState(): Promise<AppState> {
     s`select count(*)::int as total,
         count(*) filter (where decided_at >= date_trunc('month', now() at time zone 'America/New_York') at time zone 'America/New_York')::int as month
       from eat_outs where status = 'accepted'`,
+    s`select id, created_at from hunger_pings where status = 'active' order by created_at desc limit 1`,
+    s`select a.id, a.meal, coalesce(a.cooked_at, a.picked_at) as at, a.photo_id, d.id as dish_id, d.name, d.cuisine, d.image_id,
+        r.stars, r.note
+      from asks a join dishes d on d.id = a.picked_dish_id
+      left join lateral (select stars, note from ratings where ask_id = a.id order by created_at desc limit 1) r on true
+      where a.status in ('cooked', 'rated') order by at desc limit 500`,
+    s`select id, meal, place, decided_at from eat_outs where status = 'accepted' order by decided_at desc limit 200`,
   ]);
   const eatOuts: EatOut[] = eatRows.map((e: any) => ({
     id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at,
@@ -189,5 +211,18 @@ export async function getState(): Promise<AppState> {
   const chefRatings = ratings.filter((r) => r.chefStars);
   const chefAvg = chefRatings.length ? chefRatings.reduce((t, r) => t + (r.chefStars || 0), 0) / chefRatings.length : null;
 
-  return { dishes, asks, requests, ratings, flavors, chefAvg, eatOuts, eatOutTotal: eatCounts[0].total, eatOutMonth: eatCounts[0].month };
+  const history: HistoryItem[] = [
+    ...mealRows.map((m: any) => ({
+      kind: "meal" as const, id: m.id, at: m.at, meal: m.meal, name: m.name, cuisine: m.cuisine, dishId: m.dish_id,
+      photoId: m.photo_id || m.image_id || null, stars: m.stars ?? null, note: m.note ?? null,
+    })),
+    ...outRows.map((o: any) => ({
+      kind: "out" as const, id: o.id, at: o.decided_at, meal: o.meal, name: o.place || "Ate out", cuisine: null, dishId: null,
+      photoId: null, stars: null, note: null,
+    })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  const hunger = hungerRows[0] ? { id: hungerRows[0].id, createdAt: hungerRows[0].created_at } : null;
+
+  return { dishes, asks, requests, ratings, flavors, chefAvg, eatOuts, eatOutTotal: eatCounts[0].total, eatOutMonth: eatCounts[0].month, hunger, history };
 }

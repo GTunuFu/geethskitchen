@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const t = body.type as string;
   const chefOnly = ["addDish", "updateDish", "archiveDish", "ask", "cancelAsk", "cooked", "cookDirect", "requestStatus", "decideEatOut"];
-  const herOnly = ["pick", "request", "rate", "eatOut", "cancelEatOut"];
+  const herOnly = ["pick", "request", "rate", "eatOut", "cancelEatOut", "hungry", "notHungry"];
   if (chefOnly.includes(t) && role !== "chef") return NextResponse.json({ error: "chef only" }, { status: 403 });
   if (herOnly.includes(t) && role !== "her") return NextResponse.json({ error: "not for the chef" }, { status: 403 });
 
@@ -59,12 +59,13 @@ export async function POST(req: Request) {
         const ids: number[] = (body.dishIds || []).map(Number).filter(Boolean);
         if (!ids.length) return NextResponse.json({ error: "Pick at least one dish" }, { status: 400 });
         await s`update asks set status = 'closed' where meal = ${meal} and status = 'open'`;
+        await s`update hunger_pings set status = 'served', resolved_at = now() where status = 'active'`;
         const [a] = await s`insert into asks (meal, note) values (${meal}, ${clean(body.note, 300)}) returning id`;
         for (const id of ids) await s`insert into ask_options (ask_id, dish_id) values (${a.id}, ${id}) on conflict do nothing`;
         const names = await s`select name from dishes where id in ${s(ids)}`;
         await notify("her", {
           title: meal === "lunch" ? "🍱 LUNCH MENU JUST DROPPED" : "🍝 DINNER MENU JUST DROPPED",
-          body: `${names.map((n: any) => n.name).join(" · ")} — what are you craving?`,
+          body: `${names.map((n: any) => n.name).join(" · ")} — what are you craving? (Or… eat out? 👀)`,
           url: "/her",
           tag: `ask-${a.id}`,
         });
@@ -94,6 +95,26 @@ export async function POST(req: Request) {
         await notify("chef", { title: `${HER_NAME} ${what}`, body: kind === "recipe" ? clean(body.text, 80) || "Check your inbox, chef." : `For ${body.meal || "the next meal"}. Back to the kitchen!`, url: "/chef?tab=inbox" });
         return NextResponse.json({ ok: true });
       }
+      case "hungry": {
+        await s`update hunger_pings set status = 'cancelled', resolved_at = now() where status = 'active'`;
+        await s`insert into hunger_pings default values`;
+        await notify("chef", {
+          title: "🥟 I'M HUNGRY!!",
+          body: "The Dumpling Lollipop is getting Hangry…. or even…. Strangry!!!",
+          url: "/chef",
+          tag: "hungry",
+        });
+        return NextResponse.json({ ok: true });
+      }
+      case "notHungry": {
+        const asks = await s`update asks set status = 'closed' where status in ('open', 'requested') returning id`;
+        const pings = await s`update hunger_pings set status = 'cancelled', resolved_at = now() where status = 'active' returning id`;
+        const outs = await s`update eat_outs set status = 'cancelled' where status = 'pending' returning id`;
+        if (asks.length + pings.length + outs.length > 0) {
+          await notify("chef", { title: `😴 ${HER_NAME} isn't hungry`, body: "Menu and requests cancelled. Stand down, chef.", url: "/chef", tag: "hungry" });
+        }
+        return NextResponse.json({ ok: true });
+      }
       case "eatOut": {
         const meal = body.meal === "lunch" ? "lunch" : body.meal === "dinner" ? "dinner" : null;
         await s`update eat_outs set status = 'cancelled' where status = 'pending'`;
@@ -117,6 +138,7 @@ export async function POST(req: Request) {
           where id = ${body.id} and status = 'pending' returning *`;
         if (!e) return NextResponse.json({ error: "That request is already handled" }, { status: 400 });
         if (accept && e.meal) await s`update asks set status = 'closed' where meal = ${e.meal} and status in ('open', 'requested')`;
+        if (accept) await s`update hunger_pings set status = 'served', resolved_at = now() where status = 'active'`;
         const [c] = await s`select count(*)::int as n from eat_outs where status = 'accepted'`;
         await notify("her", accept
           ? { title: "🎉 We're eating out!", body: `${e.place ? `${e.place} it is. ` : ""}Eat-out counter: ${c.n}`, url: "/her", tag: "eatout" }

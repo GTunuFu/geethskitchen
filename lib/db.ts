@@ -81,6 +81,12 @@ create table if not exists eat_outs (
   created_at timestamptz default now(),
   decided_at timestamptz
 );
+create table if not exists hunger_pings (
+  id serial primary key,
+  status text not null default 'active',
+  created_at timestamptz default now(),
+  resolved_at timestamptz
+);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

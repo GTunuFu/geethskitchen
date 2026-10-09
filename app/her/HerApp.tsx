@@ -158,6 +158,9 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
   const nothing = !toRate.length && !open.length && !picked.length && !requested.length;
   const hour = new Date().getHours();
   const greet = hour < 11 ? "Good morning" : hour < 17 ? "Hey hungry" : "Good evening";
+  const [eatSheet, setEatSheet] = useState<"lunch" | "dinner" | null>(null);
+  const defaultMeal = hour < 15 ? "lunch" : "dinner";
+  const notHungry = () => run(() => act("notHungry"), "Got it. Chef stands down 😴");
 
   return (
     <div className="section stack">
@@ -166,7 +169,25 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
         <p>Your personal chef is standing by.</p>
       </div>
 
-      <EatOutCard state={state} herName={herName} run={run} />
+      {state.hunger ? (
+        <div className="banner" style={{ background: "var(--tomato)", color: "#fff" }}>
+          <span className="pill" style={{ background: "#fff", color: "var(--ink)" }}>sent {timeAgo(state.hunger.createdAt)}</span>
+          <h3 style={{ marginTop: 10 }}>🚨 Hangry alert sent!</h3>
+          <p>The chef has been warned. A menu is on its way.</p>
+          <button className="btn small white" style={{ marginTop: 12 }} onClick={notHungry}>😴 Not hungry anymore</button>
+        </div>
+      ) : (
+        !open.length && (
+          <button
+            className="btn tomato huge block hungry-btn"
+            onClick={() => run(() => act("hungry"), "Chef has been alerted 🚨", true)}
+          >
+            🥟 I&apos;m hungry!!
+          </button>
+        )
+      )}
+
+      <EatOutCard state={state} run={run} onOpen={() => setEatSheet(defaultMeal)} />
 
       <PushCard who="her" />
 
@@ -175,7 +196,7 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
       ))}
 
       {open.map((a) => (
-        <MenuDrop key={a.id} ask={a} dishes={a.options.map(dish).filter(Boolean) as Dish[]} run={run} onRequest={() => onRequest({ askId: a.id, meal: a.meal })} />
+        <MenuDrop key={a.id} ask={a} dishes={a.options.map(dish).filter(Boolean) as Dish[]} run={run} onRequest={() => onRequest({ askId: a.id, meal: a.meal })} onEatOut={() => setEatSheet(a.meal)} onNotHungry={notHungry} />
       ))}
 
       {picked.map((a) => (
@@ -205,11 +226,12 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
           <button className="btn tomato" style={{ marginTop: 8 }} onClick={() => onRequest({})}>Tell him what you want</button>
         </div>
       )}
+      {eatSheet && <EatOutSheet meal={eatSheet} run={run} onClose={() => setEatSheet(null)} />}
     </div>
   );
 }
 
-function MenuDrop({ ask, dishes, run, onRequest }: { ask: Ask; dishes: Dish[]; run: any; onRequest: () => void }) {
+function MenuDrop({ ask, dishes, run, onRequest, onEatOut, onNotHungry }: { ask: Ask; dishes: Dish[]; run: any; onRequest: () => void; onEatOut: () => void; onNotHungry: () => void }) {
   const [peek, setPeek] = useState<Dish | null>(null);
   return (
     <div className="stack">
@@ -228,6 +250,10 @@ function MenuDrop({ ask, dishes, run, onRequest }: { ask: Ask; dishes: Dish[]; r
         ))}
       </div>
       <button className="btn white block" onClick={onRequest}>🙅‍♀️ None of these. I want something else</button>
+      <div className="row">
+        <button className="btn grow" style={{ background: "var(--grape)", color: "#fff" }} onClick={onEatOut}>🍽️ Let&apos;s eat out?</button>
+        <button className="btn white grow" onClick={onNotHungry}>😴 Not hungry</button>
+      </div>
       {peek && (
         <Sheet open onClose={() => setPeek(null)} title={peek.name}>
           <div className="stack">
@@ -477,14 +503,9 @@ function Diary({ state }: { state: ClientState }) {
 }
 
 /* ============ EAT OUT ============ */
-function EatOutCard({ state, herName, run }: { state: ClientState; herName: string; run: any }) {
-  const [open, setOpen] = useState(false);
-  const [meal, setMeal] = useState<"lunch" | "dinner">(new Date().getHours() < 15 ? "lunch" : "dinner");
-  const [place, setPlace] = useState("");
-  const [note, setNote] = useState("");
+function EatOutCard({ state, run, onOpen }: { state: ClientState; run: any; onOpen: () => void }) {
   const pending = state.eatOuts.find((e) => e.status === "pending");
   const recent = state.eatOuts.find((e) => (e.status === "accepted" || e.status === "declined") && e.decidedAt && Date.now() - new Date(e.decidedAt).getTime() < 12 * 3600 * 1000);
-
   return (
     <div className="stack" style={{ gap: 10 }}>
       <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
@@ -500,41 +521,45 @@ function EatOutCard({ state, herName, run }: { state: ClientState; herName: stri
           <p>{recent.status === "accepted" ? (recent.place ? `${recent.place} it is.` : "Pick somewhere good.") : "Keep an eye out for a menu."}</p>
         </div>
       ) : (
-        <button className="btn block" style={{ background: "var(--grape)", color: "#fff" }} onClick={() => setOpen(true)}>
+        <button className="btn block" style={{ background: "var(--grape)", color: "#fff" }} onClick={onOpen}>
           🍽️ Let&apos;s eat out?
         </button>
       )}
-      {open && (
-        <Sheet open onClose={() => setOpen(false)} title="Let's eat out?">
-          <div className="stack">
-            <div className="seg">
-              <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
-              <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
-            </div>
-            <div className="field">
-              <label>Where? (optional)</label>
-              <input className="input" placeholder="That ramen place on 2nd Ave" value={place} onChange={(e) => setPlace(e.target.value)} />
-            </div>
-            <div className="field">
-              <label>Your case (optional)</label>
-              <input className="input" placeholder="You deserve a night off 💋" value={note} onChange={(e) => setNote(e.target.value)} />
-            </div>
-            <button
-              className="btn tomato block huge"
-              onClick={() =>
-                run(async () => {
-                  await act("eatOut", { meal, place, note });
-                  setOpen(false);
-                  setPlace("");
-                  setNote("");
-                }, "Asked the chef 🙏", true)
-              }
-            >
-              Ask the chef 🙏
-            </button>
-          </div>
-        </Sheet>
-      )}
     </div>
+  );
+}
+
+function EatOutSheet({ meal: initialMeal, run, onClose }: { meal: "lunch" | "dinner"; run: any; onClose: () => void }) {
+  const [meal, setMeal] = useState<"lunch" | "dinner">(initialMeal);
+  const [place, setPlace] = useState("");
+  const [note, setNote] = useState("");
+  return (
+    <Sheet open onClose={onClose} title="Let's eat out?">
+      <div className="stack">
+        <div className="seg">
+          <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
+          <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
+        </div>
+        <div className="field">
+          <label>Where? (optional)</label>
+          <input className="input" placeholder="That ramen place on 2nd Ave" value={place} onChange={(e) => setPlace(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Your case (optional)</label>
+          <input className="input" placeholder="You deserve a night off 💋" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <button
+          className="btn tomato block huge"
+          onClick={() =>
+            run(async () => {
+              await act("eatOut", { meal, place, note });
+              onClose();
+            }, "Asked the chef 🙏", true)
+          }
+        >
+          Ask the chef 🙏
+        </button>
+      </div>
+    </Sheet>
   );
 }
