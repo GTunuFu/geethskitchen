@@ -66,6 +66,7 @@ export type EatOut = {
   status: "pending" | "accepted" | "declined" | "cancelled";
   createdAt: string;
   decidedAt: string | null;
+  proposedBy: "her" | "chef";
 };
 
 export type HistoryItem = {
@@ -123,7 +124,7 @@ export async function getState(): Promise<AppState> {
     s`select id, meal, place, decided_at from eat_outs where status = 'accepted' order by decided_at desc limit 200`,
   ]);
   const eatOuts: EatOut[] = eatRows.map((e: any) => ({
-    id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at,
+    id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at, proposedBy: e.proposed_by,
   }));
 
   const dishes: Dish[] = dishRows.map((d: any) => ({

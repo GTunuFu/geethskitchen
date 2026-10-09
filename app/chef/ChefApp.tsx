@@ -203,7 +203,9 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
   const live = state.asks.filter((a) => ["open", "picked", "requested", "cooked"].includes(a.status));
   const dish = (id: number | null) => state.dishes.find((d) => d.id === id);
   const lastRating = state.ratings[0];
-  const pendingEat = state.eatOuts.find((e) => e.status === "pending");
+  const pendingEat = state.eatOuts.find((e) => e.status === "pending" && e.proposedBy === "her");
+  const myInvite = state.eatOuts.find((e) => e.status === "pending" && e.proposedBy === "chef");
+  const [inviteOpen, setInviteOpen] = useState(false);
   const hour = new Date().getHours();
 
   return (
@@ -218,6 +220,32 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
           </button>
         </div>
         <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
+        {myInvite ? (
+          <div className="banner" style={{ background: "var(--grape)" }}>
+            <span className="pill" style={{ background: "#fff" }}>{myInvite.meal || "eat out"} · asked {timeAgo(myInvite.createdAt)}</span>
+            <h3 style={{ marginTop: 10 }}>Asked {herName} to eat out 🍽️</h3>
+            <p>{myInvite.place ? `${myInvite.place}? ` : ""}Waiting on her answer…</p>
+            <button className="btn small white" style={{ marginTop: 10 }} onClick={() => run(() => act("cancelEatOut", { id: myInvite.id }), "Invite cancelled")}>Never mind</button>
+          </div>
+        ) : (
+          !pendingEat && (
+            <button className="btn block" style={{ background: "var(--grape)", color: "#fff" }} onClick={() => setInviteOpen(true)}>
+              🍽️ Wanna eat out?
+            </button>
+          )
+        )}
+        {inviteOpen && (
+          <InviteSheet
+            herName={herName}
+            onClose={() => setInviteOpen(false)}
+            onSend={(meal, place, note) =>
+              run(async () => {
+                await act("proposeEatOut", { meal, place, note });
+                setInviteOpen(false);
+              }, `Asked ${herName} 🍽️`, true)
+            }
+          />
+        )}
         <PushCard who="chef" />
       </div>
 
@@ -727,5 +755,42 @@ function FlavorBar({ f, color }: { f: { flavor: string; score: number; loves: nu
       <div className="bar"><div style={{ width: `${(f.score / 5) * 100}%`, background: color }} /></div>
       <span>{f.score.toFixed(1)}</span>
     </div>
+  );
+}
+
+/* ============ INVITE HER OUT ============ */
+function InviteSheet({ herName, onClose, onSend }: { herName: string; onClose: () => void; onSend: (meal: "lunch" | "dinner", place: string, note: string) => Promise<void> }) {
+  const [meal, setMeal] = useState<"lunch" | "dinner">(new Date().getHours() < 15 ? "lunch" : "dinner");
+  const [place, setPlace] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet open onClose={onClose} title="Wanna eat out?">
+      <div className="stack">
+        <div className="seg">
+          <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
+          <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
+        </div>
+        <div className="field">
+          <label>Where? (optional)</label>
+          <input className="input" placeholder="That sushi spot she loves" value={place} onChange={(e) => setPlace(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Note (optional)</label>
+          <input className="input" placeholder="Chef needs a night off 😮‍💨" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <button
+          className="btn tomato block huge"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await onSend(meal, place, note);
+            setBusy(false);
+          }}
+        >
+          {busy ? "Asking…" : `Ask ${herName} 🙏`}
+        </button>
+      </div>
+    </Sheet>
   );
 }

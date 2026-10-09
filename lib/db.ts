@@ -81,6 +81,7 @@ create table if not exists eat_outs (
   created_at timestamptz default now(),
   decided_at timestamptz
 );
+alter table eat_outs add column if not exists proposed_by text not null default 'her';
 create table if not exists hunger_pings (
   id serial primary key,
   status text not null default 'active',

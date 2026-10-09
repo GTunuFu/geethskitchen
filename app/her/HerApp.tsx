@@ -509,7 +509,18 @@ function EatOutCard({ state, run, onOpen }: { state: ClientState; run: any; onOp
   return (
     <div className="stack" style={{ gap: 10 }}>
       <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
-      {pending ? (
+      {pending && pending.proposedBy === "chef" ? (
+        <div className="banner burst">
+          <span className="pill" style={{ background: "#fff" }}>{pending.meal || "eat out"} · {timeAgo(pending.createdAt)}</span>
+          <h3 style={{ marginTop: 10 }}>The chef wants to take you out! 🍽️</h3>
+          {pending.place && <p>Thinking: <b>{pending.place}</b></p>}
+          {pending.note && <p>&ldquo;{pending.note}&rdquo;</p>}
+          <div className="row wrap" style={{ marginTop: 12 }}>
+            <button className="btn mint" onClick={() => run(() => act("answerEatOut", { id: pending.id, accept: true }), `Date night! Counter: ${state.eatOutTotal + 1} 🍽️`, true)}>Yes!! (+1)</button>
+            <button className="btn white" onClick={() => run(() => act("answerEatOut", { id: pending.id, accept: false }), "Chef has been told to cook 👨‍🍳")}>No, cook for me 🏠</button>
+          </div>
+        </div>
+      ) : pending ? (
         <div className="banner" style={{ background: "var(--grape)" }}>
           <h3>Eat-out request sent 🍽️</h3>
           <p>{pending.place ? `${pending.place}? ` : ""}Waiting on the chef&apos;s verdict…</p>
@@ -517,7 +528,7 @@ function EatOutCard({ state, run, onOpen }: { state: ClientState; run: any; onOp
         </div>
       ) : recent ? (
         <div className={`banner ${recent.status === "accepted" ? "mint" : "yellow"}`}>
-          <h3>{recent.status === "accepted" ? "We're eating out! 🎉" : "Chef says he's cooking 👨‍🍳"}</h3>
+          <h3>{recent.status === "accepted" ? "We're eating out! 🎉" : recent.proposedBy === "chef" ? "Home cooking it is 🏠" : "Chef says he's cooking 👨‍🍳"}</h3>
           <p>{recent.status === "accepted" ? (recent.place ? `${recent.place} it is.` : "Pick somewhere good.") : "Keep an eye out for a menu."}</p>
         </div>
       ) : (
