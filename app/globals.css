@@ -153,7 +153,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* ---------- Tab bar ---------- */
 .tabbar { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; padding: 8px 10px calc(8px + var(--safe-b)); background: var(--ink);
   display: flex; justify-content: center; }
-.tabbar .inner { width: 100%; max-width: 560px; display: flex; gap: 4px; padding: 0 62px; }
+.tabbar .inner { width: 100%; max-width: 560px; display: flex; gap: 0; padding: 0 50px; }
 .tabbar button { flex: 1; border: 0; background: transparent; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-family: var(--display); font-size: 10px; text-transform: uppercase; padding: 6px 2px; border-radius: 14px; position: relative; }
 .tabbar button .i { font-size: 22px; line-height: 1; }
@@ -257,3 +257,34 @@ textarea.input { min-height: 90px; resize: vertical; }
 .hungry-btn { font-size: 30px; padding: 22px 18px; animation: hungry 1.6s ease-in-out infinite; }
 @keyframes hungry { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg) scale(1.02); } }
 @media (prefers-reduced-motion: reduce) { .hungry-btn { animation: none; } }
+
+.day-seg button { padding: 13px 6px; font-size: 15px; }
+.day-seg button.on { background: var(--cobalt); color: #fff; }
+
+/* ---------- Chat ---------- */
+.chat { padding-bottom: 150px; }
+.chat-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 4px 4px 0 var(--ink); }
+.chat-head img { width: 52px; height: auto; filter: drop-shadow(2px 2px 0 rgba(26, 17, 16, 0.8)); }
+.chat-list { display: flex; flex-direction: column; gap: 4px; }
+.chat-day { align-self: center; text-align: center; margin: 14px auto 8px; width: fit-content; font-family: var(--display); font-size: 11px; text-transform: uppercase; background: var(--ink); color: var(--butter); padding: 4px 10px; border-radius: 999px; }
+.bubble-row { display: flex; }
+.bubble-row.mine { justify-content: flex-end; }
+.chat-bubble { position: relative; max-width: 78%; padding: 9px 13px 7px; border: 2.5px solid var(--ink); border-radius: 20px; font-weight: 700; font-size: 16px; line-height: 1.3; white-space: pre-wrap; word-break: break-word; }
+.chat-bubble.mine { background: var(--tomato); color: #fff; }
+.chat-bubble.theirs { background: #fff; }
+.chat-bubble.mine.tail { border-bottom-right-radius: 6px; box-shadow: 3px 3px 0 var(--ink); }
+.chat-bubble.theirs.tail { border-bottom-left-radius: 6px; box-shadow: 3px 3px 0 var(--ink); }
+.chat-bubble.tail { margin-bottom: 6px; }
+.chat-bubble.pending { opacity: 0.6; }
+.chat-time { display: block; font-size: 10px; font-weight: 800; opacity: 0.65; margin-top: 2px; text-align: right; }
+.chat-receipt { text-align: right; font-size: 11px; font-weight: 900; opacity: 0.6; margin: -2px 4px 4px; }
+.composer { position: fixed; z-index: 45; left: 0; right: 0; bottom: calc(var(--tabbar) + var(--safe-b)); padding: 8px 12px; background: var(--paper); border-top: 3px solid var(--ink); }
+.composer-inner { max-width: 560px; margin: 0 auto; }
+.composer .input { padding: 11px 14px; border-radius: 999px; }
+.composer .btn { padding: 11px 16px; font-size: 18px; }
+.quick { display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 8px; scrollbar-width: none; }
+.quick::-webkit-scrollbar { display: none; }
+.quick .chip { flex: none; padding: 5px 10px; font-size: 12px; }
+
+.tabbar button { font-size: 8.5px; letter-spacing: -0.02em; min-width: 0; padding-left: 0; padding-right: 0; white-space: nowrap; }
+.tabbar .dot { right: 10%; }

@@ -416,3 +416,16 @@ export function EatOutCounter({ total, month }: { total: number; month: number }
     </div>
   );
 }
+
+/* ---------------- menu day ---------------- */
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function dayWord(forDay?: string | null): string {
+  if (!forDay) return "today";
+  const t = new Date();
+  if (forDay === isoDay(t)) return "today";
+  const tm = new Date(t); tm.setDate(t.getDate() + 1);
+  if (forDay === isoDay(tm)) return "tomorrow";
+  const y = new Date(t); y.setDate(t.getDate() - 1);
+  if (forDay === isoDay(y)) return "yesterday";
+  return new Date(forDay + "T12:00").toLocaleDateString(undefined, { weekday: "long" }).toLowerCase();
+}

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Bobbleheads, { boingAll } from "@/components/Bobbleheads";
+import Chat from "@/components/Chat";
 import {
   act,
   confetti,
@@ -17,6 +18,7 @@ import {
   Sheet,
   starText,
   TabBar,
+  dayWord,
   timeAgo,
   useAppState,
   useToast,
@@ -25,7 +27,7 @@ import {
 import { CUISINES, cuisineEmoji } from "@/lib/constants";
 import type { Ask, Dish, Req } from "@/lib/data";
 
-type Tab = "home" | "menu" | "inbox" | "stats";
+type Tab = "home" | "menu" | "inbox" | "chat" | "stats";
 type Meal = "lunch" | "dinner";
 
 export default function ChefApp({ herName }: { herName: string }) {
@@ -77,11 +79,14 @@ export default function ChefApp({ herName }: { herName: string }) {
             {tab === "menu" && <MenuTab state={state} onAdd={() => setEditing("new")} onView={setViewing} />}
             {tab === "inbox" && <Inbox state={state} herName={herName} run={run} onAsk={setAskMeal} />}
             {tab === "stats" && <Stats state={state} herName={herName} />}
+            {tab === "chat" && <Chat me="chef" herName={herName} onSeen={reload} />}
           </>
         )}
-        <div className="section center">
-          <button className="btn small white" onClick={logout}>Log out</button>
-        </div>
+        {tab !== "chat" && (
+          <div className="section center">
+            <button className="btn small white" onClick={logout}>Log out</button>
+          </div>
+        )}
       </div>
 
       <TabBar<Tab>
@@ -91,13 +96,14 @@ export default function ChefApp({ herName }: { herName: string }) {
           window.scrollTo({ top: 0 });
         }}
         tabs={[
-          { id: "home", label: "Kitchen", icon: "🔥" },
+          { id: "home", label: "Home", icon: "🔥" },
           { id: "menu", label: "Menu", icon: "📖" },
           { id: "inbox", label: "Inbox", icon: "💌", dot: newReqs },
-          { id: "stats", label: "Ratings", icon: "⭐" },
+          { id: "chat", label: "Chat", icon: "💬", dot: state?.unreadFrom.her },
+          { id: "stats", label: "Stats", icon: "⭐" },
         ]}
       />
-      <Bobbleheads />
+      {tab !== "chat" && <Bobbleheads />}
 
       {state && askMeal && (
         <AskSheet
@@ -107,9 +113,9 @@ export default function ChefApp({ herName }: { herName: string }) {
           herName={herName}
           onClose={() => setAskMeal(null)}
           onNewDish={() => setEditing("new")}
-          onSend={(ids, note) =>
+          onSend={(ids, note, day) =>
             run(async () => {
-              await act("ask", { meal: askMeal, dishIds: ids, note });
+              await act("ask", { meal: askMeal, dishIds: ids, note, day });
               setAskMeal(null);
             }, `Menu sent to ${herName}! 📣`, true)
           }
@@ -305,7 +311,7 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
 
 function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk, onServe }: { ask: Ask; herName: string; dish: (id: number | null) => Dish | undefined; run: any; req?: Req; goInbox: () => void; onAsk: (m: Meal) => void; onServe: (s: { askId: number; dish?: Dish }) => void }) {
   const picked = dish(ask.pickedDishId);
-  const meal = ask.meal.toUpperCase();
+  const meal = `${dayWord(ask.forDay)} ${ask.meal}`.toUpperCase();
   if (ask.status === "open")
     return (
       <div className="banner yellow">
@@ -362,7 +368,10 @@ function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk, onServe }: { as
 }
 
 /* ============ ASK SHEET ============ */
-function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }: { meal: Meal; setMeal: (m: Meal) => void; dishes: Dish[]; herName: string; onClose: () => void; onSend: (ids: number[], note: string) => void; onNewDish: () => void }) {
+function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }: { meal: Meal; setMeal: (m: Meal) => void; dishes: Dish[]; herName: string; onClose: () => void; onSend: (ids: number[], note: string, day: "today" | "tomorrow") => void; onNewDish: () => void }) {
+  const hour = new Date().getHours();
+  // late in the day, default to planning tomorrow's meal
+  const [day, setDay] = useState<"today" | "tomorrow">((meal === "lunch" && hour >= 15) || (meal === "dinner" && hour >= 21) ? "tomorrow" : "today");
   const [sel, setSel] = useState<number[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -370,6 +379,10 @@ function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }
   return (
     <Sheet open onClose={onClose} title={`Ask about ${meal}`}>
       <div className="stack">
+        <div className="seg day-seg">
+          <button className={day === "today" ? "on" : ""} onClick={() => setDay("today")}>☀️ Today</button>
+          <button className={day === "tomorrow" ? "on" : ""} onClick={() => setDay("tomorrow")}>🌙 Tomorrow</button>
+        </div>
         <div className="seg">
           <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
           <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
@@ -395,11 +408,11 @@ function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }
           disabled={!sel.length || busy}
           onClick={async () => {
             setBusy(true);
-            await onSend(sel, note);
+            await onSend(sel, note, day);
             setBusy(false);
           }}
         >
-          {busy ? "Sending…" : `Send ${sel.length || ""} to ${herName} 📣`}
+          {busy ? "Sending…" : `Send ${day === "tomorrow" ? "tomorrow's " : ""}menu to ${herName} 📣`}
         </button>
       </div>
     </Sheet>

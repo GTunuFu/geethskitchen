@@ -58,13 +58,15 @@ export async function POST(req: Request) {
         const meal = body.meal === "lunch" ? "lunch" : "dinner";
         const ids: number[] = (body.dishIds || []).map(Number).filter(Boolean);
         if (!ids.length) return NextResponse.json({ error: "Pick at least one dish" }, { status: 400 });
-        await s`update asks set status = 'closed' where meal = ${meal} and status = 'open'`;
-        await s`update hunger_pings set status = 'served', resolved_at = now() where status = 'active'`;
-        const [a] = await s`insert into asks (meal, note) values (${meal}, ${clean(body.note, 300)}) returning id`;
+        const tomorrow = body.day === "tomorrow";
+        const [{ d }] = await s`select ((now() at time zone 'America/New_York')::date + ${tomorrow ? 1 : 0}::int) as d`;
+        await s`update asks set status = 'closed' where meal = ${meal} and for_date = ${d} and status = 'open'`;
+        if (!tomorrow) await s`update hunger_pings set status = 'served', resolved_at = now() where status = 'active'`;
+        const [a] = await s`insert into asks (meal, note, for_date) values (${meal}, ${clean(body.note, 300)}, ${d}) returning id`;
         for (const id of ids) await s`insert into ask_options (ask_id, dish_id) values (${a.id}, ${id}) on conflict do nothing`;
         const names = await s`select name from dishes where id in ${s(ids)}`;
         await notify("her", {
-          title: meal === "lunch" ? "🍱 LUNCH MENU JUST DROPPED" : "🍝 DINNER MENU JUST DROPPED",
+          title: `${meal === "lunch" ? "🍱" : "🍝"} ${tomorrow ? "TOMORROW'S " : ""}${meal.toUpperCase()} MENU JUST DROPPED`,
           body: `${names.map((n: any) => n.name).join(" · ")} — what are you craving? (Or… eat out? 👀)`,
           url: "/her",
           tag: `ask-${a.id}`,

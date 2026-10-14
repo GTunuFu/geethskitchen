@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Bobbleheads, { boingAll } from "@/components/Bobbleheads";
+import Chat from "@/components/Chat";
 import {
   act,
   confetti,
@@ -19,6 +20,7 @@ import {
   Stars,
   starText,
   TabBar,
+  dayWord,
   timeAgo,
   useAppState,
   useToast,
@@ -27,7 +29,7 @@ import {
 import { CUISINES, cuisineEmoji, FLAVORS } from "@/lib/constants";
 import type { Ask, Dish } from "@/lib/data";
 
-type Tab = "today" | "menu" | "crave" | "diary";
+type Tab = "today" | "menu" | "crave" | "chat" | "diary";
 
 function seenAsks(): number[] {
   try {
@@ -48,6 +50,11 @@ export default function HerApp({ herName }: { herName: string }) {
   const [splash, setSplash] = useState<{ title: string; sub?: string } | null>(null);
   const [requestFor, setRequestFor] = useState<{ askId?: number; meal?: string; text?: string } | null>(null);
   const toast = useToast();
+
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get("tab") as Tab | null;
+    if (t) setTab(t);
+  }, []);
 
   // Big "NEW MENU!!" moment when a fresh menu arrives
   useEffect(() => {
@@ -104,11 +111,14 @@ export default function HerApp({ herName }: { herName: string }) {
               </div>
             )}
             {tab === "diary" && <Diary state={state} />}
+            {tab === "chat" && <Chat me="her" herName={herName} onSeen={reload} />}
           </>
         )}
-        <div className="section center">
-          <button className="btn small white" onClick={logout}>Log out</button>
-        </div>
+        {tab !== "chat" && (
+          <div className="section center">
+            <button className="btn small white" onClick={logout}>Log out</button>
+          </div>
+        )}
       </div>
 
       <TabBar<Tab>
@@ -121,10 +131,11 @@ export default function HerApp({ herName }: { herName: string }) {
           { id: "today", label: "Today", icon: "🍽️", dot: pending },
           { id: "menu", label: "Menu", icon: "📖" },
           { id: "crave", label: "Crave", icon: "🤤" },
+          { id: "chat", label: "Chat", icon: "💬", dot: state?.unreadFrom.chef },
           { id: "diary", label: "Diary", icon: "⭐" },
         ]}
       />
-      <Bobbleheads />
+      {tab !== "chat" && <Bobbleheads />}
 
       {requestFor && (
         <Sheet open onClose={() => setRequestFor(null)} title={requestFor.askId ? "Not feelin' it?" : "Request it"}>
@@ -237,7 +248,7 @@ function MenuDrop({ ask, dishes, run, onRequest, onEatOut, onNotHungry }: { ask:
     <div className="stack">
       <div className="center" style={{ marginTop: 6 }}>
         <span className="pill" style={{ background: "var(--ink)", color: "var(--butter)", fontSize: 12, padding: "5px 12px" }}>
-          {ask.meal === "lunch" ? "🍱 TODAY'S LUNCH" : "🍝 TONIGHT'S DINNER"} · {timeAgo(ask.createdAt)}
+          {dayWord(ask.forDay) === "tomorrow" ? (ask.meal === "lunch" ? "🍱 TOMORROW'S LUNCH" : "🍝 TOMORROW'S DINNER") : ask.meal === "lunch" ? "🍱 TODAY'S LUNCH" : "🍝 TONIGHT'S DINNER"} · {timeAgo(ask.createdAt)}
         </span>
         <h2 className="display" style={{ fontSize: 34, margin: "12px 0 0", color: "var(--tomato)", WebkitTextStroke: "2px var(--ink)", paintOrder: "stroke fill", textShadow: "3px 3px 0 var(--ink)" }}>
           What are you craving?

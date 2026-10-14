@@ -88,6 +88,15 @@ create table if not exists hunger_pings (
   created_at timestamptz default now(),
   resolved_at timestamptz
 );
+alter table asks add column if not exists for_date date;
+update asks set for_date = (created_at at time zone 'America/New_York')::date where for_date is null;
+create table if not exists messages (
+  id serial primary key,
+  sender text not null,
+  body text not null,
+  created_at timestamptz default now(),
+  read_at timestamptz
+);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

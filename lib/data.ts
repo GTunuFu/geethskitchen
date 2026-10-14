@@ -27,6 +27,7 @@ export type Ask = {
   createdAt: string;
   options: number[];
   photoId: number | null;
+  forDay: string | null;
 };
 
 export type Req = {
@@ -93,13 +94,14 @@ export type AppState = {
   eatOutTotal: number;
   eatOutMonth: number;
   hunger: { id: number; createdAt: string } | null;
+  unreadFrom: { chef: number; her: number };
   history: HistoryItem[];
 };
 
 export async function getState(): Promise<AppState> {
   await ready();
   const s = db();
-  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts, hungerRows, mealRows, outRows] = await Promise.all([
+  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts, hungerRows, mealRows, outRows, unreadRows] = await Promise.all([
     s`
       select d.*,
         (select count(*) from asks a where a.picked_dish_id = d.id and a.status in ('cooked','rated'))::int as times_cooked,
@@ -107,7 +109,7 @@ export async function getState(): Promise<AppState> {
         (select avg(r.stars)::float from ratings r where r.dish_id = d.id) as avg_stars,
         (select count(*) from ratings r where r.dish_id = d.id)::int as rating_count
       from dishes d order by d.created_at desc`,
-    s`select * from asks order by created_at desc limit 40`,
+    s`select *, to_char(for_date, 'YYYY-MM-DD') as for_day from asks order by created_at desc limit 40`,
     s`select ao.* from ask_options ao join (select id from asks order by created_at desc limit 40) a on a.id = ao.ask_id`,
     s`select * from requests order by created_at desc limit 40`,
     s`select r.*, d.name as dish_name from ratings r left join dishes d on d.id = r.dish_id order by r.created_at desc limit 200`,
@@ -122,6 +124,7 @@ export async function getState(): Promise<AppState> {
       left join lateral (select stars, note from ratings where ask_id = a.id order by created_at desc limit 1) r on true
       where a.status in ('cooked', 'rated') order by at desc limit 500`,
     s`select id, meal, place, decided_at from eat_outs where status = 'accepted' order by decided_at desc limit 200`,
+    s`select sender, count(*)::int as n from messages where read_at is null group by sender`,
   ]);
   const eatOuts: EatOut[] = eatRows.map((e: any) => ({
     id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at, proposedBy: e.proposed_by,
@@ -153,6 +156,7 @@ export async function getState(): Promise<AppState> {
     createdAt: a.created_at,
     options: optRows.filter((o: any) => o.ask_id === a.id).map((o: any) => o.dish_id),
     photoId: a.photo_id,
+    forDay: a.for_day,
   }));
 
   const requests: Req[] = reqRows.map((r: any) => ({
@@ -225,5 +229,6 @@ export async function getState(): Promise<AppState> {
 
   const hunger = hungerRows[0] ? { id: hungerRows[0].id, createdAt: hungerRows[0].created_at } : null;
 
-  return { dishes, asks, requests, ratings, flavors, chefAvg, eatOuts, eatOutTotal: eatCounts[0].total, eatOutMonth: eatCounts[0].month, hunger, history };
+  return { dishes, asks, requests, ratings, flavors, chefAvg, eatOuts, eatOutTotal: eatCounts[0].total, eatOutMonth: eatCounts[0].month, hunger, history,
+    unreadFrom: { chef: unreadRows.find((r: any) => r.sender === "chef")?.n || 0, her: unreadRows.find((r: any) => r.sender === "her")?.n || 0 } };
 }
