@@ -104,8 +104,9 @@ export async function POST(req: Request) {
         const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || "") ? body.day : null;
         const stars = body.stars ? Math.max(1, Math.min(5, Number(body.stars))) : null;
         const imageId = await saveImage(body.image);
-        await s`insert into diary_entries (eaten_on, slot, what, stars, note, image_id)
-          values (coalesce(${day}::date, (now() at time zone 'America/New_York')::date), ${slot}, ${what}, ${stars}, ${clean(body.note, 1000)}, ${imageId})`;
+        const dishId = Number(body.dishId) || null;
+        await s`insert into diary_entries (eaten_on, slot, what, stars, note, image_id, dish_id)
+          values (coalesce(${day}::date, (now() at time zone 'America/New_York')::date), ${slot}, ${what}, ${stars}, ${clean(body.note, 1000)}, ${imageId}, ${dishId})`;
         return NextResponse.json({ ok: true });
       }
       case "deleteDiary": {

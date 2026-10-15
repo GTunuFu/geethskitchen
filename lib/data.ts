@@ -125,10 +125,11 @@ export async function getState(): Promise<AppState> {
       where a.status in ('cooked', 'rated') order by at desc limit 500`,
     s`select id, meal, place, decided_at from eat_outs where status = 'accepted' order by decided_at desc limit 200`,
     s`select sender, count(*)::int as n from messages where read_at is null group by sender`,
-    s`select id, slot, what, stars, note, image_id,
-        (eaten_on + case slot when 'brekkie' then time '08:00' when 'lonch' then time '12:30' else time '19:00' end)
+    s`select e.id, e.slot, e.what, e.stars, e.note, coalesce(e.image_id, d.image_id) as image_id, e.dish_id, d.cuisine,
+        (e.eaten_on + case e.slot when 'brekkie' then time '08:00' when 'lonch' then time '12:30' else time '19:00' end)
           at time zone 'America/New_York' as at
-      from diary_entries order by eaten_on desc, id desc limit 500`,
+      from diary_entries e left join dishes d on d.id = e.dish_id
+      order by e.eaten_on desc, e.id desc limit 500`,
   ]);
   const eatOuts: EatOut[] = eatRows.map((e: any) => ({
     id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at, proposedBy: e.proposed_by,
@@ -226,7 +227,7 @@ export async function getState(): Promise<AppState> {
       photoId: m.photo_id || m.image_id || null, stars: m.stars ?? null, note: m.note ?? null,
     })),
     ...diaryRows.map((e: any) => ({
-      kind: "diary" as const, id: e.id, at: e.at, meal: e.slot, name: e.what, cuisine: null, dishId: null,
+      kind: "diary" as const, id: e.id, at: e.at, meal: e.slot, name: e.what, cuisine: e.cuisine ?? null, dishId: e.dish_id ?? null,
       photoId: e.image_id, stars: e.stars, note: e.note,
     })),
     ...outRows.map((o: any) => ({

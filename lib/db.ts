@@ -107,6 +107,7 @@ create table if not exists diary_entries (
   image_id int references images(id),
   created_at timestamptz default now()
 );
+alter table diary_entries add column if not exists dish_id int references dishes(id);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

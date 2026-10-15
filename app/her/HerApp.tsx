@@ -551,12 +551,12 @@ function Diary({ state, run }: { state: ClientState; run: any }) {
           );
         })
       )}
-      {adding && <DiarySheet onClose={() => setAdding(false)} run={run} />}
+      {adding && <DiarySheet onClose={() => setAdding(false)} run={run} dishes={state.dishes.filter((d) => !d.archived)} past={state.history.filter((h) => h.kind === "diary").map((h) => h.name)} />}
     </div>
   );
 }
 
-function DiarySheet({ onClose, run }: { onClose: () => void; run: any }) {
+function DiarySheet({ onClose, run, dishes, past }: { onClose: () => void; run: any; dishes: Dish[]; past: string[] }) {
   const now = new Date();
   const today = ymd(now);
   const yest = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
@@ -564,7 +564,16 @@ function DiarySheet({ onClose, run }: { onClose: () => void; run: any }) {
   const [day, setDay] = useState(today);
   const [slot, setSlot] = useState<string>(h < 11 ? "brekkie" : h < 16 ? "lonch" : "dindin");
   const [what, setWhat] = useState("");
+  const [dishId, setDishId] = useState<number | null>(null);
+  const [showSugg, setShowSugg] = useState(true);
   const [stars, setStars] = useState(0);
+  const q = what.trim().toLowerCase();
+  const menuMatches = dishes.filter((d) => !q || d.name.toLowerCase().includes(q)).slice(0, 8);
+  const pastMatches = [...new Set(past)]
+    .filter((n) => !dishes.some((d) => d.name.toLowerCase() === n.toLowerCase()))
+    .filter((n) => !q || n.toLowerCase().includes(q))
+    .slice(0, 5);
+  const picked = dishes.find((d) => d.id === dishId);
   const [note, setNote] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -573,7 +582,58 @@ function DiarySheet({ onClose, run }: { onClose: () => void; run: any }) {
       <div className="stack">
         <div className="field">
           <label>What did you eat?</label>
-          <input className="input" placeholder="Bagel with scallion cream cheese" value={what} onChange={(e) => setWhat(e.target.value)} />
+          <input
+            className="input"
+            placeholder="Pick from the menu or type anything"
+            value={what}
+            onFocus={() => setShowSugg(true)}
+            onChange={(e) => {
+              setWhat(e.target.value);
+              setDishId(null);
+              setShowSugg(true);
+            }}
+          />
+          {picked && (
+            <div className="row" style={{ gap: 8 }}>
+              <span className="pill" style={{ background: "var(--butter)" }}>👨‍🍳 from the chef&apos;s menu</span>
+            </div>
+          )}
+          {showSugg && !picked && (menuMatches.length > 0 || pastMatches.length > 0) && (
+            <div className="sugg">
+              {menuMatches.length > 0 && <div className="sugg-head">From the chef&apos;s menu</div>}
+              {menuMatches.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  className="sugg-item"
+                  onClick={() => {
+                    setWhat(d.name);
+                    setDishId(d.id);
+                    setShowSugg(false);
+                  }}
+                >
+                  <DishArt dish={d} className="sugg-thumb" />
+                  <span className="grow">{d.name}</span>
+                  {d.avgStars != null && <span className="stars-static">★ {d.avgStars.toFixed(1)}</span>}
+                </button>
+              ))}
+              {pastMatches.length > 0 && <div className="sugg-head">You&apos;ve logged before</div>}
+              {pastMatches.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="sugg-item"
+                  onClick={() => {
+                    setWhat(n);
+                    setShowSugg(false);
+                  }}
+                >
+                  <span className="sugg-thumb" style={{ background: "var(--pink)" }}>📓</span>
+                  <span className="grow">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="field">
           <label>Which meal?</label>
@@ -606,7 +666,7 @@ function DiarySheet({ onClose, run }: { onClose: () => void; run: any }) {
           onClick={async () => {
             setBusy(true);
             await run(async () => {
-              await act("addDiary", { what, slot, day, stars: stars || null, note, image });
+              await act("addDiary", { what, slot, day, stars: stars || null, note, image, dishId });
               onClose();
             }, "Added to your diary 📓", true);
             setBusy(false);
