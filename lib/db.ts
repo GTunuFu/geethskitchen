@@ -97,6 +97,16 @@ create table if not exists messages (
   created_at timestamptz default now(),
   read_at timestamptz
 );
+create table if not exists diary_entries (
+  id serial primary key,
+  eaten_on date not null,
+  slot text not null,
+  what text not null,
+  stars int,
+  note text,
+  image_id int references images(id),
+  created_at timestamptz default now()
+);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

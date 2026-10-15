@@ -71,7 +71,7 @@ export type EatOut = {
 };
 
 export type HistoryItem = {
-  kind: "meal" | "out";
+  kind: "meal" | "out" | "diary";
   id: number;
   at: string;
   meal: string | null;
@@ -101,7 +101,7 @@ export type AppState = {
 export async function getState(): Promise<AppState> {
   await ready();
   const s = db();
-  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts, hungerRows, mealRows, outRows, unreadRows] = await Promise.all([
+  const [dishRows, askRows, optRows, reqRows, ratingRows, eatRows, eatCounts, hungerRows, mealRows, outRows, unreadRows, diaryRows] = await Promise.all([
     s`
       select d.*,
         (select count(*) from asks a where a.picked_dish_id = d.id and a.status in ('cooked','rated'))::int as times_cooked,
@@ -125,6 +125,10 @@ export async function getState(): Promise<AppState> {
       where a.status in ('cooked', 'rated') order by at desc limit 500`,
     s`select id, meal, place, decided_at from eat_outs where status = 'accepted' order by decided_at desc limit 200`,
     s`select sender, count(*)::int as n from messages where read_at is null group by sender`,
+    s`select id, slot, what, stars, note, image_id,
+        (eaten_on + case slot when 'brekkie' then time '08:00' when 'lonch' then time '12:30' else time '19:00' end)
+          at time zone 'America/New_York' as at
+      from diary_entries order by eaten_on desc, id desc limit 500`,
   ]);
   const eatOuts: EatOut[] = eatRows.map((e: any) => ({
     id: e.id, meal: e.meal, place: e.place, note: e.note, status: e.status, createdAt: e.created_at, decidedAt: e.decided_at, proposedBy: e.proposed_by,
@@ -220,6 +224,10 @@ export async function getState(): Promise<AppState> {
     ...mealRows.map((m: any) => ({
       kind: "meal" as const, id: m.id, at: m.at, meal: m.meal, name: m.name, cuisine: m.cuisine, dishId: m.dish_id,
       photoId: m.photo_id || m.image_id || null, stars: m.stars ?? null, note: m.note ?? null,
+    })),
+    ...diaryRows.map((e: any) => ({
+      kind: "diary" as const, id: e.id, at: e.at, meal: e.slot, name: e.what, cuisine: null, dishId: null,
+      photoId: e.image_id, stars: e.stars, note: e.note,
     })),
     ...outRows.map((o: any) => ({
       kind: "out" as const, id: o.id, at: o.decided_at, meal: o.meal, name: o.place || "Ate out", cuisine: null, dishId: null,

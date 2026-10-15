@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const t = body.type as string;
   const chefOnly = ["addDish", "updateDish", "archiveDish", "ask", "cancelAsk", "cooked", "cookDirect", "requestStatus", "decideEatOut", "proposeEatOut"];
-  const herOnly = ["pick", "request", "rate", "eatOut", "hungry", "notHungry", "answerEatOut"];
+  const herOnly = ["pick", "request", "rate", "eatOut", "hungry", "notHungry", "answerEatOut", "addDiary", "deleteDiary"];
   if (chefOnly.includes(t) && role !== "chef") return NextResponse.json({ error: "chef only" }, { status: 403 });
   if (herOnly.includes(t) && role !== "her") return NextResponse.json({ error: "not for the chef" }, { status: 403 });
 
@@ -95,6 +95,21 @@ export async function POST(req: Request) {
         if (askId) await s`update asks set status = 'requested' where id = ${askId} and status = 'open'`;
         const what = kind === "recipe" ? "sent you a recipe 📖" : `wants ${clean(body.text, 80) || clean(body.cuisine, 60) || "something else"}`;
         await notify("chef", { title: `${HER_NAME} ${what}`, body: kind === "recipe" ? clean(body.text, 80) || "Check your inbox, chef." : `For ${body.meal || "the next meal"}. Back to the kitchen!`, url: "/chef?tab=inbox" });
+        return NextResponse.json({ ok: true });
+      }
+      case "addDiary": {
+        const what = clean(body.what, 160);
+        if (!what) return NextResponse.json({ error: "What did you eat?" }, { status: 400 });
+        const slot = ["brekkie", "lonch", "dindin"].includes(body.slot) ? body.slot : "lonch";
+        const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || "") ? body.day : null;
+        const stars = body.stars ? Math.max(1, Math.min(5, Number(body.stars))) : null;
+        const imageId = await saveImage(body.image);
+        await s`insert into diary_entries (eaten_on, slot, what, stars, note, image_id)
+          values (coalesce(${day}::date, (now() at time zone 'America/New_York')::date), ${slot}, ${what}, ${stars}, ${clean(body.note, 1000)}, ${imageId})`;
+        return NextResponse.json({ ok: true });
+      }
+      case "deleteDiary": {
+        await s`delete from diary_entries where id = ${body.id}`;
         return NextResponse.json({ ok: true });
       }
       case "hungry": {

@@ -153,7 +153,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* ---------- Tab bar ---------- */
 .tabbar { position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; padding: 8px 10px calc(8px + var(--safe-b)); background: var(--ink);
   display: flex; justify-content: center; }
-.tabbar .inner { width: 100%; max-width: 560px; display: flex; gap: 0; padding: 0 50px; }
+.tabbar .inner { width: 100%; max-width: 560px; display: flex; gap: 0; padding: 0 44px; }
 .tabbar button { flex: 1; border: 0; background: transparent; color: #fff; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-family: var(--display); font-size: 10px; text-transform: uppercase; padding: 6px 2px; border-radius: 14px; position: relative; }
 .tabbar button .i { font-size: 22px; line-height: 1; }
@@ -185,7 +185,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 @keyframes fall { to { transform: translateY(110vh) rotate(720deg); } }
 
 /* ---------- Bobbleheads ---------- */
-.bobble { position: fixed; z-index: 50; bottom: calc(var(--safe-b) + var(--bobble-lift, 4px)); width: 70px; pointer-events: none; }
+.bobble { position: fixed; z-index: 50; bottom: calc(var(--safe-b) + var(--bobble-lift, 4px)); width: 56px; pointer-events: none; }
 .bobble.left { left: max(4px, calc(50% - 300px)); }
 .bobble.right { right: max(4px, calc(50% - 300px)); }
 .bobble .head-wrap { position: relative; z-index: 2; pointer-events: auto; cursor: pointer; transform-origin: 50% 96%; animation: bob 1.7s ease-in-out infinite; }
@@ -222,7 +222,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 @keyframes pop-in { from { transform: scale(0); } }
 
 @media (min-width: 700px) {
-  .bobble { width: 120px; }
+  .bobble { width: 96px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .bobble .head-wrap, .bobble .spring, .marquee span, .splash svg { animation: none !important; }

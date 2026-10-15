@@ -429,3 +429,11 @@ export function dayWord(forDay?: string | null): string {
   if (forDay === isoDay(y)) return "yesterday";
   return new Date(forDay + "T12:00").toLocaleDateString(undefined, { weekday: "long" }).toLowerCase();
 }
+
+/* ---------------- her meal words ---------------- */
+export function slotWord(meal?: string | null) {
+  if (meal === "brekkie") return "Brekkie";
+  if (meal === "lonch" || meal === "lunch") return "Lonch";
+  if (meal === "dindin" || meal === "dinner") return "Din din";
+  return meal || "";
+}

@@ -21,6 +21,7 @@ import {
   starText,
   TabBar,
   dayWord,
+  slotWord,
   timeAgo,
   useAppState,
   useToast,
@@ -110,7 +111,7 @@ export default function HerApp({ herName }: { herName: string }) {
                 <RequestForm onDone={(msg) => { toast.show(msg); boingAll({ geeth: "Heard!", her: "Pleeease" }); reload(); }} />
               </div>
             )}
-            {tab === "diary" && <Diary state={state} />}
+            {tab === "diary" && <Diary state={state} run={run} />}
             {tab === "chat" && <Chat me="her" herName={herName} onSeen={reload} />}
           </>
         )}
@@ -491,25 +492,130 @@ function Browse({ state, onRequest }: { state: ClientState; onRequest: (d: Dish)
 }
 
 /* ============ DIARY ============ */
-function Diary({ state }: { state: ClientState }) {
+const SLOTS = [
+  { id: "brekkie", label: "Brekkie", emoji: "🥐" },
+  { id: "lonch", label: "Lonch", emoji: "🥪" },
+  { id: "dindin", label: "Din din", emoji: "🍝" },
+] as const;
+
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+function Diary({ state, run }: { state: ClientState; run: any }) {
+  const [adding, setAdding] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<number | null>(null);
+  const items = state.history;
+  let lastDay = "";
   return (
     <div className="section stack">
       <SectionTitle tag="日記">Food diary</SectionTitle>
-      {state.ratings.length === 0 ? (
-        <div className="empty"><div className="big">⭐</div><p>Your reviews will live here.</p></div>
+      <button className="btn tomato huge block" onClick={() => setAdding(true)}>📓 Add to diary</button>
+      {items.length === 0 ? (
+        <div className="empty"><div className="big">📓</div><p>Everything you eat lives here: the chef&apos;s cooking, nights out, and anything you add.</p></div>
       ) : (
-        state.ratings.map((r) => (
-          <div key={r.id} className="card pad">
-            <div className="row">
-              <b className="grow display" style={{ fontSize: 16 }}>{r.dishName}</b>
-              <span className="muted">{timeAgo(r.createdAt)}</span>
+        items.map((m) => {
+          const d = new Date(m.at);
+          const day = ymd(d);
+          const header = day !== lastDay ? (lastDay = day) : null;
+          const w = dayWord(day);
+          const dayText = w === "today" || w === "yesterday" ? w[0].toUpperCase() + w.slice(1) : d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+          const slot = m.kind === "diary" ? SLOTS.find((x) => x.id === m.meal) : null;
+          return (
+            <div key={`${m.kind}-${m.id}`} className="stack" style={{ gap: 10 }}>
+              {header && <div className="pill" style={{ background: "var(--ink)", color: "var(--butter)", alignSelf: "flex-start", fontSize: 12, padding: "5px 12px" }}>{dayText}</div>}
+              <div className="card list-dish" style={m.kind === "out" ? { background: "#efe6ff" } : m.kind === "meal" ? { background: "#fff8e1" } : undefined}>
+                {m.photoId ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <div className="thumb"><img src={`/api/img/${m.photoId}`} alt="" loading="lazy" /></div>
+                ) : (
+                  <div className="thumb" style={{ background: m.kind === "out" ? "var(--grape)" : m.kind === "meal" ? "var(--butter)" : "var(--pink)" }}>
+                    {m.kind === "out" ? "🍽️" : m.kind === "meal" ? "👨‍🍳" : slot?.emoji || "🍴"}
+                  </div>
+                )}
+                <div className="grow">
+                  <div className="muted" style={{ fontWeight: 800 }}>
+                    {slotWord(m.meal) || "Meal"} · {m.kind === "out" ? "ate out" : m.kind === "meal" ? "chef's kitchen" : "my entry"}
+                  </div>
+                  <div className="display" style={{ fontSize: 16, marginTop: 2 }}>{m.name}</div>
+                  {m.stars ? <div className="stars-static">{starText(m.stars)}</div> : null}
+                  {m.note && <div style={{ fontSize: 13, marginTop: 2 }}>&ldquo;{m.note}&rdquo;</div>}
+                </div>
+                {m.kind === "diary" && (
+                  confirmDel === m.id ? (
+                    <button className="btn small tomato" onClick={() => run(() => act("deleteDiary", { id: m.id }), "Deleted")}>Delete?</button>
+                  ) : (
+                    <button className="btn small white" aria-label="Delete entry" onClick={() => setConfirmDel(m.id)}>✕</button>
+                  )
+                )}
+              </div>
             </div>
-            <div className="stars-static" style={{ fontSize: 18, marginTop: 4 }}>{starText(r.stars)}</div>
-            {r.note && <p style={{ margin: "6px 0 0" }}>&ldquo;{r.note}&rdquo;</p>}
-          </div>
-        ))
+          );
+        })
       )}
+      {adding && <DiarySheet onClose={() => setAdding(false)} run={run} />}
     </div>
+  );
+}
+
+function DiarySheet({ onClose, run }: { onClose: () => void; run: any }) {
+  const now = new Date();
+  const today = ymd(now);
+  const yest = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  const h = now.getHours();
+  const [day, setDay] = useState(today);
+  const [slot, setSlot] = useState<string>(h < 11 ? "brekkie" : h < 16 ? "lonch" : "dindin");
+  const [what, setWhat] = useState("");
+  const [stars, setStars] = useState(0);
+  const [note, setNote] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Sheet open onClose={onClose} title="Add to diary">
+      <div className="stack">
+        <div className="field">
+          <label>What did you eat?</label>
+          <input className="input" placeholder="Bagel with scallion cream cheese" value={what} onChange={(e) => setWhat(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Which meal?</label>
+          <div className="seg">
+            {SLOTS.map((x) => (
+              <button key={x.id} className={slot === x.id ? "on" : ""} onClick={() => setSlot(x.id)}>{x.emoji} {x.label}</button>
+            ))}
+          </div>
+        </div>
+        <div className="field">
+          <label>Which day?</label>
+          <div className="row wrap" style={{ gap: 7 }}>
+            <span className={`chip ${day === today ? "on" : ""}`} onClick={() => setDay(today)}>Today</span>
+            <span className={`chip ${day === yest ? "on" : ""}`} onClick={() => setDay(yest)}>Yesterday</span>
+            <input className="input" type="date" max={today} value={day} onChange={(e) => e.target.value && setDay(e.target.value)} style={{ width: "auto", flex: 1, minWidth: 150, padding: "8px 12px" }} />
+          </div>
+        </div>
+        <div className="field">
+          <label>Rating (optional)</label>
+          <Stars value={stars} onChange={(n) => setStars(n === stars ? 0 : n)} small />
+        </div>
+        <div className="field">
+          <label>Note (optional)</label>
+          <input className="input" placeholder="Would eat again 🤤" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <PhotoPicker value={image} onChange={setImage} label="Add a photo (optional)" />
+        <button
+          className="btn tomato block huge"
+          disabled={!what.trim() || busy}
+          onClick={async () => {
+            setBusy(true);
+            await run(async () => {
+              await act("addDiary", { what, slot, day, stars: stars || null, note, image });
+              onClose();
+            }, "Added to your diary 📓", true);
+            setBusy(false);
+          }}
+        >
+          {busy ? "Saving…" : "Save 📓"}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 

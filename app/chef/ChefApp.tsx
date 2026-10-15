@@ -19,6 +19,7 @@ import {
   starText,
   TabBar,
   dayWord,
+  slotWord,
   timeAgo,
   useAppState,
   useToast,
@@ -645,12 +646,12 @@ function Stats({ state, herName }: { state: ClientState; herName: string }) {
           <button className={view === "history" ? "on" : ""} onClick={() => setView("history")}>📜 History</button>
         </div>
       </div>
-      {view === "scores" ? <Scores state={state} herName={herName} /> : <History state={state} />}
+      {view === "scores" ? <Scores state={state} herName={herName} /> : <History state={state} herName={herName} />}
     </>
   );
 }
 
-function History({ state }: { state: ClientState }) {
+function History({ state, herName }: { state: ClientState; herName: string }) {
   const items = state.history;
   let lastMonth = "";
   return (
@@ -666,18 +667,20 @@ function History({ state }: { state: ClientState }) {
           return (
             <div key={`${m.kind}-${m.id}`} className="stack" style={{ gap: 10 }}>
               {header && <div className="pill" style={{ background: "var(--ink)", color: "var(--butter)", alignSelf: "flex-start", fontSize: 12, padding: "5px 12px" }}>{header}</div>}
-              <div className="card list-dish" style={m.kind === "out" ? { background: "#efe6ff" } : undefined}>
+              <div className="card list-dish" style={m.kind === "out" ? { background: "#efe6ff" } : m.kind === "diary" ? { background: "#fff0f7" } : undefined}>
                 {m.kind === "out" ? (
                   <div className="thumb" style={{ background: "var(--grape)" }}>🍽️</div>
                 ) : m.photoId ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <div className="thumb"><img src={`/api/img/${m.photoId}`} alt="" loading="lazy" /></div>
                 ) : (
-                  <div className="thumb" style={{ background: "var(--butter)" }}>{cuisineEmoji(m.cuisine)}</div>
+                  <div className="thumb" style={{ background: m.kind === "diary" ? "var(--pink)" : "var(--butter)" }}>
+                    {m.kind === "diary" ? ({ brekkie: "🥐", lonch: "🥪", dindin: "🍝" } as Record<string, string>)[m.meal || ""] || "🍴" : cuisineEmoji(m.cuisine)}
+                  </div>
                 )}
                 <div className="grow">
                   <div className="muted" style={{ fontWeight: 800 }}>
-                    {d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {m.kind === "out" ? `ate out${m.meal ? ` · ${m.meal}` : ""}` : m.meal}
+                    {d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {m.kind === "out" ? `ate out${m.meal ? ` · ${m.meal}` : ""}` : m.kind === "diary" ? `📓 ${herName}'s diary · ${slotWord(m.meal)}` : m.meal}
                   </div>
                   <div className="display" style={{ fontSize: 16, marginTop: 2 }}>{m.name}</div>
                   {m.stars ? <div className="stars-static">{starText(m.stars)}</div> : m.kind === "meal" ? <div className="muted">not rated yet</div> : null}
