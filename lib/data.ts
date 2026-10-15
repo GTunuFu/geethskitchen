@@ -1,11 +1,12 @@
 import { db, ready } from "./db";
-import { FLAVORS } from "./constants";
+import { FLAVORS, type Meal } from "./constants";
 
 export type Dish = {
   id: number;
   name: string;
-  meal: "lunch" | "dinner" | "both";
+  meals: Meal[];
   cuisine: string | null;
+  cuisines: string[];
   flavors: string[];
   description: string | null;
   imageId: number | null;
@@ -18,7 +19,7 @@ export type Dish = {
 
 export type Ask = {
   id: number;
-  meal: "lunch" | "dinner";
+  meal: Meal;
   note: string | null;
   status: "open" | "picked" | "requested" | "cooked" | "rated" | "closed";
   pickedDishId: number | null;
@@ -138,8 +139,9 @@ export async function getState(): Promise<AppState> {
   const dishes: Dish[] = dishRows.map((d: any) => ({
     id: d.id,
     name: d.name,
-    meal: d.meal,
-    cuisine: d.cuisine,
+    meals: d.meals?.length ? d.meals : ["lunch", "dinner"],
+    cuisine: d.cuisines?.[0] ?? d.cuisine ?? null,
+    cuisines: d.cuisines?.length ? d.cuisines : d.cuisine ? [d.cuisine] : [],
     flavors: d.flavors || [],
     description: d.description,
     imageId: d.image_id,

@@ -22,12 +22,13 @@ import {
   TabBar,
   dayWord,
   slotWord,
+  MealSeg,
   timeAgo,
   useAppState,
   useToast,
   type ClientState,
 } from "@/components/kit";
-import { CUISINES, cuisineEmoji, FLAVORS } from "@/lib/constants";
+import { CUISINES, cuisineEmoji, FLAVORS, MEALS, mealForHour, type Meal } from "@/lib/constants";
 import type { Ask, Dish } from "@/lib/data";
 
 type Tab = "today" | "menu" | "crave" | "chat" | "diary";
@@ -65,7 +66,7 @@ export default function HerApp({ herName }: { herName: string }) {
     const fresh = open.filter((a) => !seen.includes(a.id));
     if (fresh.length) {
       setTab("today");
-      setSplash({ title: "NEW MENU!!", sub: fresh[0].meal === "lunch" ? "ランチ · LUNCH" : "ディナー · DINNER" });
+      setSplash({ title: "NEW MENU!!", sub: fresh[0].meal === "breakfast" ? "朝ごはん · BREAKFAST" : fresh[0].meal === "lunch" ? "ランチ · LUNCH" : "ディナー · DINNER" });
       setTimeout(() => boingAll({ geeth: "Order up!", her: "Ooooh!" }), 400);
       markSeen(fresh.map((a) => a.id));
     }
@@ -170,8 +171,8 @@ function Today({ state, herName, run, onRequest }: { state: ClientState; herName
   const nothing = !toRate.length && !open.length && !picked.length && !requested.length;
   const hour = new Date().getHours();
   const greet = hour < 11 ? "Good morning" : hour < 17 ? "Hey hungry" : "Good evening";
-  const [eatSheet, setEatSheet] = useState<"lunch" | "dinner" | null>(null);
-  const defaultMeal = hour < 15 ? "lunch" : "dinner";
+  const [eatSheet, setEatSheet] = useState<Meal | null>(null);
+  const defaultMeal = mealForHour(hour);
   const notHungry = () => run(() => act("notHungry"), "Got it. Chef stands down 😴");
 
   return (
@@ -249,7 +250,7 @@ function MenuDrop({ ask, dishes, run, onRequest, onEatOut, onNotHungry }: { ask:
     <div className="stack">
       <div className="center" style={{ marginTop: 6 }}>
         <span className="pill" style={{ background: "var(--ink)", color: "var(--butter)", fontSize: 12, padding: "5px 12px" }}>
-          {dayWord(ask.forDay) === "tomorrow" ? (ask.meal === "lunch" ? "🍱 TOMORROW'S LUNCH" : "🍝 TOMORROW'S DINNER") : ask.meal === "lunch" ? "🍱 TODAY'S LUNCH" : "🍝 TONIGHT'S DINNER"} · {timeAgo(ask.createdAt)}
+          {MEALS.find((m) => m.id === ask.meal)?.emoji} {dayWord(ask.forDay) === "tomorrow" ? "TOMORROW'S" : ask.meal === "dinner" ? "TONIGHT'S" : "TODAY'S"} {ask.meal.toUpperCase()} · {timeAgo(ask.createdAt)}
         </span>
         <h2 className="display" style={{ fontSize: 34, margin: "12px 0 0", color: "var(--tomato)", WebkitTextStroke: "2px var(--ink)", paintOrder: "stroke fill", textShadow: "3px 3px 0 var(--ink)" }}>
           What are you craving?
@@ -273,7 +274,7 @@ function MenuDrop({ ask, dishes, run, onRequest, onEatOut, onNotHungry }: { ask:
               <DishArt dish={peek} className="ph detail-ph" />
             </div>
             <div className="row wrap">
-              {peek.cuisine && <span className="pill" style={{ background: "var(--butter)" }}>{cuisineEmoji(peek.cuisine)} {peek.cuisine}</span>}
+              {peek.cuisines.map((c) => <span key={c} className="pill" style={{ background: "var(--butter)" }}>{cuisineEmoji(c)} {c}</span>)}
               {peek.flavors.map((f) => <span key={f} className="pill" style={{ background: "var(--pink)" }}>{f}</span>)}
             </div>
             {peek.description && <p style={{ margin: 0 }}>{peek.description}</p>}
@@ -369,7 +370,7 @@ function RateCard({ ask, dish, run }: { ask: Ask; dish?: Dish; run: any }) {
 /* ============ REQUEST FORM ============ */
 function RequestForm({ askId, meal: initialMeal, initialText, initialMode = "cuisine", onDone }: { askId?: number; meal?: string; initialText?: string; initialMode?: "cuisine" | "specific" | "recipe"; onDone: (msg: string) => void }) {
   const [mode, setMode] = useState<"cuisine" | "specific" | "recipe">(initialMode);
-  const [meal, setMeal] = useState(initialMeal || (new Date().getHours() < 14 ? "lunch" : "dinner"));
+  const [meal, setMeal] = useState<string>(initialMeal || mealForHour(new Date().getHours()));
   const [cuisine, setCuisine] = useState("");
   const [text, setText] = useState(initialText || "");
   const [recipeUrl, setRecipeUrl] = useState("");
@@ -388,9 +389,9 @@ function RequestForm({ askId, meal: initialMeal, initialText, initialMode = "cui
         <button className={mode === "recipe" ? "on" : ""} onClick={() => setMode("recipe")}>Recipe</button>
       </div>
       {!askId && (
-        <div className="seg">
-          {["lunch", "dinner", "whenever"].map((m) => (
-            <button key={m} className={meal === m ? "on" : ""} onClick={() => setMeal(m)}>{m}</button>
+        <div className="seg meal-seg">
+          {[...MEALS.map((m) => [m.id, `${m.emoji} ${m.id === "breakfast" ? "Bfast" : m.label}`]), ["whenever", "Whenever"]].map(([id, label]) => (
+            <button key={id} className={meal === id ? "on" : ""} onClick={() => setMeal(id)}>{label}</button>
           ))}
         </div>
       )}
@@ -717,17 +718,14 @@ function EatOutCard({ state, run, onOpen }: { state: ClientState; run: any; onOp
   );
 }
 
-function EatOutSheet({ meal: initialMeal, run, onClose }: { meal: "lunch" | "dinner"; run: any; onClose: () => void }) {
-  const [meal, setMeal] = useState<"lunch" | "dinner">(initialMeal);
+function EatOutSheet({ meal: initialMeal, run, onClose }: { meal: Meal; run: any; onClose: () => void }) {
+  const [meal, setMeal] = useState<Meal>(initialMeal);
   const [place, setPlace] = useState("");
   const [note, setNote] = useState("");
   return (
     <Sheet open onClose={onClose} title="Let's eat out?">
       <div className="stack">
-        <div className="seg">
-          <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
-          <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
-        </div>
+        <MealSeg value={meal} onChange={setMeal} />
         <div className="field">
           <label>Where? (optional)</label>
           <input className="input" placeholder="That ramen place on 2nd Ave" value={place} onChange={(e) => setPlace(e.target.value)} />

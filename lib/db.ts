@@ -108,6 +108,10 @@ create table if not exists diary_entries (
   created_at timestamptz default now()
 );
 alter table diary_entries add column if not exists dish_id int references dishes(id);
+alter table dishes add column if not exists meals text[];
+update dishes set meals = case meal when 'lunch' then array['lunch'] when 'dinner' then array['dinner'] when 'breakfast' then array['breakfast'] else array['lunch','dinner'] end where meals is null;
+alter table dishes add column if not exists cuisines text[];
+update dishes set cuisines = case when cuisine is null or cuisine = '' then '{}'::text[] else array[cuisine] end where cuisines is null;
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

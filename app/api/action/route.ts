@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getRole, HER_NAME } from "@/lib/auth";
 import { db, ready } from "@/lib/db";
 import { notify } from "@/lib/push";
+import { asMeal, mealEmoji, MEALS } from "@/lib/constants";
 
 const MAX_IMG = 1_800_000;
 
@@ -20,7 +21,12 @@ async function useAsDishPhoto(dishId: number | null | undefined, photoId: number
 }
 
 const clean = (v: unknown, max = 2000) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
-const mealWord = (m: string) => (m === "lunch" ? "lunch" : "dinner");
+const mealWord = (m: string) => asMeal(m) || "dinner";
+const cleanMeals = (v: unknown) => {
+  const list = (Array.isArray(v) ? v : []).map(asMeal).filter(Boolean) as string[];
+  return list.length ? MEALS.map((m) => m.id).filter((m) => list.includes(m)) : ["dinner"];
+};
+const cleanCuisines = (v: unknown) => (Array.isArray(v) ? v : []).map((c) => clean(c, 40)).filter(Boolean).slice(0, 6) as string[];
 
 export async function POST(req: Request) {
   const role = await getRole();
@@ -38,15 +44,19 @@ export async function POST(req: Request) {
     switch (t) {
       case "addDish": {
         const imageId = await saveImage(body.image);
-        const [d] = await s`insert into dishes (name, meal, cuisine, flavors, description, image_id)
-          values (${clean(body.name, 120) || "Mystery dish"}, ${body.meal || "both"}, ${clean(body.cuisine, 60)},
+        const meals = cleanMeals(body.meals);
+        const cuisines = cleanCuisines(body.cuisines);
+        const [d] = await s`insert into dishes (name, meal, meals, cuisine, cuisines, flavors, description, image_id)
+          values (${clean(body.name, 120) || "Mystery dish"}, ${meals.join(",")}, ${meals}, ${cuisines[0] || null}, ${cuisines},
                   ${body.flavors || []}, ${clean(body.description)}, ${imageId}) returning id`;
         return NextResponse.json({ ok: true, id: d.id });
       }
       case "updateDish": {
         const imageId = body.image ? await saveImage(body.image) : undefined;
-        await s`update dishes set name = ${clean(body.name, 120) || "Mystery dish"}, meal = ${body.meal || "both"},
-          cuisine = ${clean(body.cuisine, 60)}, flavors = ${body.flavors || []}, description = ${clean(body.description)}
+        const meals = cleanMeals(body.meals);
+        const cuisines = cleanCuisines(body.cuisines);
+        await s`update dishes set name = ${clean(body.name, 120) || "Mystery dish"}, meal = ${meals.join(",")}, meals = ${meals},
+          cuisine = ${cuisines[0] || null}, cuisines = ${cuisines}, flavors = ${body.flavors || []}, description = ${clean(body.description)}
           ${imageId ? s`, image_id = ${imageId}` : s``} where id = ${body.id}`;
         return NextResponse.json({ ok: true });
       }
@@ -55,7 +65,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "ask": {
-        const meal = body.meal === "lunch" ? "lunch" : "dinner";
+        const meal = asMeal(body.meal) || "dinner";
         const ids: number[] = (body.dishIds || []).map(Number).filter(Boolean);
         if (!ids.length) return NextResponse.json({ error: "Pick at least one dish" }, { status: 400 });
         const tomorrow = body.day === "tomorrow";
@@ -66,7 +76,7 @@ export async function POST(req: Request) {
         for (const id of ids) await s`insert into ask_options (ask_id, dish_id) values (${a.id}, ${id}) on conflict do nothing`;
         const names = await s`select name from dishes where id in ${s(ids)}`;
         await notify("her", {
-          title: `${meal === "lunch" ? "🍱" : "🍝"} ${tomorrow ? "TOMORROW'S " : ""}${meal.toUpperCase()} MENU JUST DROPPED`,
+          title: `${mealEmoji(meal)} ${tomorrow ? "TOMORROW'S " : ""}${meal.toUpperCase()} MENU JUST DROPPED`,
           body: `${names.map((n: any) => n.name).join(" · ")} — what are you craving? (Or… eat out? 👀)`,
           url: "/her",
           tag: `ask-${a.id}`,
@@ -134,7 +144,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "eatOut": {
-        const meal = body.meal === "lunch" ? "lunch" : body.meal === "dinner" ? "dinner" : null;
+        const meal = asMeal(body.meal);
         await s`update eat_outs set status = 'cancelled' where status = 'pending'`;
         await s`insert into eat_outs (meal, place, note) values (${meal}, ${clean(body.place, 120)}, ${clean(body.note, 300)})`;
         const where = clean(body.place, 80);
@@ -151,7 +161,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "proposeEatOut": {
-        const meal = body.meal === "lunch" ? "lunch" : body.meal === "dinner" ? "dinner" : null;
+        const meal = asMeal(body.meal);
         await s`update eat_outs set status = 'cancelled' where status = 'pending'`;
         await s`insert into eat_outs (meal, place, note, proposed_by) values (${meal}, ${clean(body.place, 120)}, ${clean(body.note, 300)}, 'chef')`;
         const where = clean(body.place, 80);
@@ -202,8 +212,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true });
       }
       case "cookDirect": {
-        const [d] = await s`select name, meal from dishes where id = ${body.dishId}`;
-        const meal = body.meal || (d?.meal === "lunch" ? "lunch" : "dinner");
+        const [d] = await s`select name, meals from dishes where id = ${body.dishId}`;
+        const meal = asMeal(body.meal) || (d?.meals?.includes("dinner") ? "dinner" : d?.meals?.[0]) || "dinner";
         const photoId = await saveImage(body.image);
         const [a] = await s`insert into asks (meal, status, picked_dish_id, picked_at, cooked_at, photo_id) values (${meal}, 'cooked', ${body.dishId}, now(), now(), ${photoId}) returning id`;
         await useAsDishPhoto(body.dishId, photoId, body.setDishPhoto);

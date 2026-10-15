@@ -44,3 +44,20 @@ export const CARD_COLORS = ["#FF5A36", "#FFD23F", "#FF8FC2", "#3D5AFE", "#2EC4A0
 export function cardColor(id: number) {
   return CARD_COLORS[id % CARD_COLORS.length];
 }
+
+export type Meal = "breakfast" | "lunch" | "dinner";
+export const MEALS: { id: Meal; label: string; emoji: string }[] = [
+  { id: "breakfast", label: "Breakfast", emoji: "🥞" },
+  { id: "lunch", label: "Lunch", emoji: "🍱" },
+  { id: "dinner", label: "Dinner", emoji: "🍝" },
+];
+export function asMeal(v: unknown): Meal | null {
+  return v === "breakfast" || v === "lunch" || v === "dinner" ? v : null;
+}
+export function mealEmoji(m?: string | null) {
+  return MEALS.find((x) => x.id === m)?.emoji || "🍽️";
+}
+/** The meal you'd most likely be planning right now. */
+export function mealForHour(h: number): Meal {
+  return h < 11 ? "breakfast" : h < 16 ? "lunch" : "dinner";
+}

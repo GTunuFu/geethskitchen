@@ -20,6 +20,8 @@ import {
   TabBar,
   dayWord,
   slotWord,
+  MealSeg,
+  MultiChips,
   timeAgo,
   useAppState,
   useToast,
@@ -29,7 +31,7 @@ import { CUISINES, cuisineEmoji } from "@/lib/constants";
 import type { Ask, Dish, Req } from "@/lib/data";
 
 type Tab = "home" | "menu" | "inbox" | "chat" | "stats";
-type Meal = "lunch" | "dinner";
+import { MEALS, asMeal, mealForHour, type Meal } from "@/lib/constants";
 
 export default function ChefApp({ herName }: { herName: string }) {
   const { state, reload, error } = useAppState(12000);
@@ -218,13 +220,17 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
   return (
     <>
       <div className="section stack">
-        <div className="row" style={{ gap: 12 }}>
-          <button className={`btn huge grow ${hour < 15 ? "tomato" : "pink"}`} onClick={() => onAsk("lunch")}>
-            <span>🍱<br />Ask about<br />lunch</span>
-          </button>
-          <button className={`btn huge grow ${hour >= 15 ? "tomato" : "pink"}`} onClick={() => onAsk("dinner")}>
-            <span>🍝<br />Ask about<br />dinner</span>
-          </button>
+        <div className="ask-row">
+          {MEALS.map((m, i) => {
+            const now = mealForHour(hour) === m.id;
+            return (
+              <button key={m.id} className={`btn ask-btn ${now ? "tomato" : i === 0 ? "" : "pink"}`} onClick={() => onAsk(m.id)}>
+                <span className="e">{m.emoji}</span>
+                <span className="a">Ask about</span>
+                <span className="m">{m.label}</span>
+              </button>
+            );
+          })}
         </div>
         <EatOutCounter total={state.eatOutTotal} month={state.eatOutMonth} />
         {myInvite ? (
@@ -264,8 +270,11 @@ function Home({ state, herName, onAsk, run, goInbox, onServe }: { state: ClientS
             <h3 style={{ marginTop: 10 }}>{herName} is HUNGRY!!</h3>
             <p>The Dumpling Lollipop is getting Hangry…. or even…. Strangry!!!</p>
             <div className="row wrap" style={{ marginTop: 12 }}>
-              <button className="btn" onClick={() => onAsk("lunch")}>🍱 Send lunch menu</button>
-              <button className="btn white" onClick={() => onAsk("dinner")}>🍝 Send dinner menu</button>
+              {MEALS.map((m) => (
+                <button key={m.id} className={`btn small ${mealForHour(new Date().getHours()) === m.id ? "" : "white"}`} onClick={() => onAsk(m.id)}>
+                  {m.emoji} {m.label} menu
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -372,11 +381,11 @@ function LiveAsk({ ask, herName, dish, run, req, goInbox, onAsk, onServe }: { as
 function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }: { meal: Meal; setMeal: (m: Meal) => void; dishes: Dish[]; herName: string; onClose: () => void; onSend: (ids: number[], note: string, day: "today" | "tomorrow") => void; onNewDish: () => void }) {
   const hour = new Date().getHours();
   // late in the day, default to planning tomorrow's meal
-  const [day, setDay] = useState<"today" | "tomorrow">((meal === "lunch" && hour >= 15) || (meal === "dinner" && hour >= 21) ? "tomorrow" : "today");
+  const [day, setDay] = useState<"today" | "tomorrow">((meal === "breakfast" && hour >= 11) || (meal === "lunch" && hour >= 15) || (meal === "dinner" && hour >= 21) ? "tomorrow" : "today");
   const [sel, setSel] = useState<number[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const list = dishes.filter((d) => !d.archived && (d.meal === meal || d.meal === "both"));
+  const list = dishes.filter((d) => !d.archived && d.meals.includes(meal));
   return (
     <Sheet open onClose={onClose} title={`Ask about ${meal}`}>
       <div className="stack">
@@ -384,10 +393,7 @@ function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }
           <button className={day === "today" ? "on" : ""} onClick={() => setDay("today")}>☀️ Today</button>
           <button className={day === "tomorrow" ? "on" : ""} onClick={() => setDay("tomorrow")}>🌙 Tomorrow</button>
         </div>
-        <div className="seg">
-          <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
-          <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
-        </div>
+        <MealSeg value={meal} onChange={setMeal} />
         <p className="muted" style={{ margin: 0 }}>Pick the options {herName} gets to choose from. 2–4 is the sweet spot.</p>
         {list.length === 0 && (
           <div className="empty">
@@ -423,8 +429,8 @@ function AskSheet({ meal, setMeal, dishes, herName, onClose, onSend, onNewDish }
 /* ============ DISH FORM ============ */
 function DishForm({ dish, onClose, onSave }: { dish: Dish | null; onClose: () => void; onSave: (p: any) => Promise<void> }) {
   const [name, setName] = useState(dish?.name || "");
-  const [meal, setMeal] = useState<Dish["meal"]>(dish?.meal || "dinner");
-  const [cuisine, setCuisine] = useState(dish?.cuisine || "");
+  const [meals, setMeals] = useState<string[]>(dish?.meals || ["dinner"]);
+  const [cuisines, setCuisines] = useState<string[]>(dish?.cuisines || []);
   const [flavors, setFlavors] = useState<string[]>(dish?.flavors || []);
   const [description, setDescription] = useState(dish?.description || "");
   const [image, setImage] = useState<string | null>(null);
@@ -437,22 +443,12 @@ function DishForm({ dish, onClose, onSave }: { dish: Dish | null; onClose: () =>
           <input className="input" placeholder="Spicy vodka rigatoni" value={name} onChange={(e) => setName(e.target.value)} autoFocus={!dish} />
         </div>
         <div className="field">
-          <label>For</label>
-          <div className="seg">
-            {(["lunch", "dinner", "both"] as const).map((m) => (
-              <button key={m} className={meal === m ? "on" : ""} onClick={() => setMeal(m)}>{m}</button>
-            ))}
-          </div>
+          <label>Good for (pick any)</label>
+          <MultiChips options={MEALS.map((m) => ({ id: m.id, label: `${m.emoji} ${m.label}` }))} value={meals} onChange={setMeals} min={1} />
         </div>
         <div className="field">
-          <label>Cuisine</label>
-          <div className="row wrap" style={{ gap: 7 }}>
-            {CUISINES.map((c) => (
-              <span key={c.name} className={`chip ${cuisine === c.name ? "on" : ""}`} onClick={() => setCuisine(cuisine === c.name ? "" : c.name)}>
-                {c.emoji} {c.name}
-              </span>
-            ))}
-          </div>
+          <label>Cuisine (pick any)</label>
+          <MultiChips options={CUISINES.map((c) => ({ id: c.name, label: `${c.emoji} ${c.name}` }))} value={cuisines} onChange={setCuisines} />
         </div>
         <div className="field">
           <label>Flavors</label>
@@ -468,7 +464,7 @@ function DishForm({ dish, onClose, onSave }: { dish: Dish | null; onClose: () =>
           disabled={!name.trim() || busy}
           onClick={async () => {
             setBusy(true);
-            await onSave({ name, meal, cuisine, flavors, description, image });
+            await onSave({ name, meals, cuisines, flavors, description, image });
             setBusy(false);
           }}
         >
@@ -481,15 +477,15 @@ function DishForm({ dish, onClose, onSave }: { dish: Dish | null; onClose: () =>
 
 /* ============ MENU TAB ============ */
 function MenuTab({ state, onAdd, onView }: { state: ClientState; onAdd: () => void; onView: (d: Dish) => void }) {
-  const [filter, setFilter] = useState<"all" | "lunch" | "dinner" | "archived">("all");
-  const list = state.dishes.filter((d) => (filter === "archived" ? d.archived : !d.archived && (filter === "all" || d.meal === filter || d.meal === "both")));
+  const [filter, setFilter] = useState<"all" | Meal | "archived">("all");
+  const list = state.dishes.filter((d) => (filter === "archived" ? d.archived : !d.archived && (filter === "all" || d.meals.includes(filter))));
   return (
     <div className="section stack">
       <SectionTitle tag={`${state.dishes.filter((d) => !d.archived).length} DISHES`}>The menu</SectionTitle>
       <button className="btn tomato block" onClick={onAdd}>＋ Add a dish</button>
-      <div className="seg">
-        {(["all", "lunch", "dinner", "archived"] as const).map((f) => (
-          <button key={f} className={filter === f ? "on" : ""} onClick={() => setFilter(f)}>{f}</button>
+      <div className="row wrap" style={{ gap: 7 }}>
+        {([["all", "All"], ...MEALS.map((m) => [m.id, `${m.emoji} ${m.label}`]), ["archived", "🪦 Archived"]] as [typeof filter, string][]).map(([f, label]) => (
+          <span key={f} className={`chip ${filter === f ? "on" : ""}`} onClick={() => setFilter(f)}>{label}</span>
         ))}
       </div>
       {list.length === 0 ? (
@@ -517,8 +513,12 @@ function DishDetail({ dish, state, onClose, onEdit, onCooked, onArchive }: { dis
           <DishArt dish={dish} className="ph detail-ph" />
         </div>
         <div className="row wrap">
-          <span className="pill" style={{ background: "var(--butter)" }}>{cuisineEmoji(dish.cuisine)} {dish.cuisine || "No cuisine"}</span>
-          <span className="pill" style={{ background: "#fff" }}>{dish.meal}</span>
+          {dish.cuisines.length ? (
+            dish.cuisines.map((c) => <span key={c} className="pill" style={{ background: "var(--butter)" }}>{cuisineEmoji(c)} {c}</span>)
+          ) : (
+            <span className="pill" style={{ background: "var(--butter)" }}>No cuisine</span>
+          )}
+          {dish.meals.map((m) => <span key={m} className="pill" style={{ background: "#fff" }}>{MEALS.find((x) => x.id === m)?.emoji} {m}</span>)}
           {dish.flavors.map((f) => (
             <span key={f} className="pill" style={{ background: "var(--pink)" }}>{f}</span>
           ))}
@@ -625,7 +625,7 @@ function RequestCard({ r, herName, run, onAsk }: { r: Req; herName: string; run:
           {r.status !== "done" && (
             <div className="row wrap" style={{ marginTop: 12 }}>
               {r.status === "new" && <button className="btn small" onClick={() => run(() => act("requestStatus", { id: r.id, status: "seen" }), "Heard, chef 👍")}>👍 On it</button>}
-              {r.kind !== "recipe" && <button className="btn small pink" onClick={() => onAsk((r.meal as Meal) === "lunch" ? "lunch" : "dinner")}>Send a menu</button>}
+              {r.kind !== "recipe" && <button className="btn small pink" onClick={() => onAsk(asMeal(r.meal) || mealForHour(new Date().getHours()))}>Send a menu</button>}
               <button className="btn small white" onClick={() => run(() => act("requestStatus", { id: r.id, status: "done" }), "Done ✓")}>✓ Done</button>
             </div>
           )}
@@ -775,18 +775,15 @@ function FlavorBar({ f, color }: { f: { flavor: string; score: number; loves: nu
 }
 
 /* ============ INVITE HER OUT ============ */
-function InviteSheet({ herName, onClose, onSend }: { herName: string; onClose: () => void; onSend: (meal: "lunch" | "dinner", place: string, note: string) => Promise<void> }) {
-  const [meal, setMeal] = useState<"lunch" | "dinner">(new Date().getHours() < 15 ? "lunch" : "dinner");
+function InviteSheet({ herName, onClose, onSend }: { herName: string; onClose: () => void; onSend: (meal: Meal, place: string, note: string) => Promise<void> }) {
+  const [meal, setMeal] = useState<Meal>(mealForHour(new Date().getHours()));
   const [place, setPlace] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   return (
     <Sheet open onClose={onClose} title="Wanna eat out?">
       <div className="stack">
-        <div className="seg">
-          <button className={meal === "lunch" ? "on" : ""} onClick={() => setMeal("lunch")}>🍱 Lunch</button>
-          <button className={meal === "dinner" ? "on" : ""} onClick={() => setMeal("dinner")}>🍝 Dinner</button>
-        </div>
+        <MealSeg value={meal} onChange={setMeal} />
         <div className="field">
           <label>Where? (optional)</label>
           <input className="input" placeholder="That sushi spot she loves" value={place} onChange={(e) => setPlace(e.target.value)} />

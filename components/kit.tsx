@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppState, Dish } from "@/lib/data";
-import { cardColor, cuisineEmoji, FLAVORS } from "@/lib/constants";
+import { cardColor, cuisineEmoji, FLAVORS, MEALS, mealEmoji, type Meal } from "@/lib/constants";
 
 /* ---------------- data ---------------- */
 export type ClientState = AppState & { role: "chef" | "her" };
@@ -281,7 +281,7 @@ export function DishCard({ dish, onClick, selected, showStats = true }: { dish: 
       <div className="meta">
         <div className="name">{dish.name}</div>
         <div className="sub">
-          {[dish.cuisine, dish.meal === "both" ? "lunch / dinner" : dish.meal].filter(Boolean).join(" · ")}
+          {[dish.cuisines.join(" · "), dish.meals.map(mealEmoji).join("")].filter(Boolean).join(" · ")}
         </div>
       </div>
     </button>
@@ -432,8 +432,44 @@ export function dayWord(forDay?: string | null): string {
 
 /* ---------------- her meal words ---------------- */
 export function slotWord(meal?: string | null) {
-  if (meal === "brekkie") return "Brekkie";
+  if (meal === "brekkie" || meal === "breakfast") return "Brekkie";
   if (meal === "lonch" || meal === "lunch") return "Lonch";
   if (meal === "dindin" || meal === "dinner") return "Din din";
   return meal || "";
+}
+
+/* ---------------- meal picker ---------------- */
+export function MealSeg({ value, onChange, short }: { value: Meal; onChange: (m: Meal) => void; short?: boolean }) {
+  return (
+    <div className="seg meal-seg">
+      {MEALS.map((m) => (
+        <button key={m.id} type="button" className={value === m.id ? "on" : ""} onClick={() => onChange(m.id)}>
+          {m.emoji} {short && m.id === "breakfast" ? "Bfast" : m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Tap-to-toggle chips; keeps at least `min` selected. */
+export function MultiChips({ options, value, onChange, min = 0 }: { options: { id: string; label: string }[]; value: string[]; onChange: (v: string[]) => void; min?: number }) {
+  return (
+    <div className="row wrap" style={{ gap: 7 }}>
+      {options.map((o) => {
+        const on = value.includes(o.id);
+        return (
+          <span
+            key={o.id}
+            className={`chip ${on ? "on" : ""}`}
+            onClick={() => {
+              if (on && value.length <= min) return;
+              onChange(on ? value.filter((x) => x !== o.id) : [...value, o.id]);
+            }}
+          >
+            {on ? "✓ " : ""}{o.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
