@@ -112,6 +112,13 @@ alter table dishes add column if not exists meals text[];
 update dishes set meals = case meal when 'lunch' then array['lunch'] when 'dinner' then array['dinner'] when 'breakfast' then array['breakfast'] else array['lunch','dinner'] end where meals is null;
 alter table dishes add column if not exists cuisines text[];
 update dishes set cuisines = case when cuisine is null or cuisine = '' then '{}'::text[] else array[cuisine] end where cuisines is null;
+alter table ratings add column if not exists diary_id int;
+update diary_entries e set dish_id = d.id from dishes d
+  where e.dish_id is null and lower(trim(e.what)) = lower(trim(d.name));
+insert into ratings (dish_id, stars, note, diary_id, created_at)
+  select e.dish_id, e.stars, e.note, e.id, e.created_at from diary_entries e
+  where e.dish_id is not null and e.stars is not null
+    and not exists (select 1 from ratings r where r.diary_id = e.id);
 create table if not exists push_subs (
   endpoint text primary key,
   role text not null,

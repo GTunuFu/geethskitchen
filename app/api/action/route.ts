@@ -114,12 +114,28 @@ export async function POST(req: Request) {
         const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day || "") ? body.day : null;
         const stars = body.stars ? Math.max(1, Math.min(5, Number(body.stars))) : null;
         const imageId = await saveImage(body.image);
-        const dishId = Number(body.dishId) || null;
-        await s`insert into diary_entries (eaten_on, slot, what, stars, note, image_id, dish_id)
-          values (coalesce(${day}::date, (now() at time zone 'America/New_York')::date), ${slot}, ${what}, ${stars}, ${clean(body.note, 1000)}, ${imageId}, ${dishId})`;
+        let dishId = Number(body.dishId) || null;
+        // typed the name of a menu dish without tapping the suggestion? link it anyway
+        if (!dishId) {
+          const [m] = await s`select id from dishes where lower(trim(name)) = lower(${what}) limit 1`;
+          dishId = m?.id ?? null;
+        }
+        const note = clean(body.note, 1000);
+        const [e] = await s`insert into diary_entries (eaten_on, slot, what, stars, note, image_id, dish_id)
+          values (coalesce(${day}::date, (now() at time zone 'America/New_York')::date), ${slot}, ${what}, ${stars}, ${note}, ${imageId}, ${dishId}) returning id`;
+        // a starred diary entry for a menu dish is a real review: it counts toward the dish's stars on both sides
+        if (dishId && stars) {
+          await s`insert into ratings (dish_id, stars, note, diary_id) values (${dishId}, ${stars}, ${note}, ${e.id})`;
+          await notify("chef", {
+            title: `${"⭐".repeat(stars)} for ${what}`,
+            body: note ? `From ${HER_NAME}'s diary: ${note.slice(0, 100)}` : `${HER_NAME} reviewed it in her diary.`,
+            url: "/chef?tab=stats",
+          });
+        }
         return NextResponse.json({ ok: true });
       }
       case "deleteDiary": {
+        await s`delete from ratings where diary_id = ${body.id}`;
         await s`delete from diary_entries where id = ${body.id}`;
         return NextResponse.json({ ok: true });
       }

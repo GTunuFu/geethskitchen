@@ -56,6 +56,7 @@ export type Rating = {
   chefStars: number | null;
   note: string | null;
   createdAt: string;
+  fromDiary: boolean;
 };
 
 export type FlavorScore = { flavor: string; score: number; loves: number; nopes: number; n: number };
@@ -191,6 +192,7 @@ export async function getState(): Promise<AppState> {
     chefStars: r.chef_stars,
     note: r.note,
     createdAt: r.created_at,
+    fromDiary: !!r.diary_id,
   }));
 
   // Flavor report: average stars of dishes carrying the flavor,

@@ -534,6 +534,7 @@ function DishDetail({ dish, state, onClose, onEdit, onCooked, onArchive }: { dis
               <div key={r.id} className="card pad">
                 <div className="row">
                   <span className="stars-static grow">{starText(r.stars)}</span>
+                  {r.fromDiary && <span className="pill" style={{ background: "var(--pink)" }}>📓 her diary</span>}
                   <span className="muted">{timeAgo(r.createdAt)}</span>
                 </div>
                 {r.note && <p style={{ margin: "6px 0 0" }}>&ldquo;{r.note}&rdquo;</p>}
@@ -702,7 +703,7 @@ function Scores({ state, herName }: { state: ClientState; herName: string }) {
   const top = useMemo(() => state.dishes.filter((d) => d.avgStars != null).sort((a, b) => (b.avgStars! - a.avgStars!) || b.timesCooked - a.timesCooked).slice(0, 5), [state.dishes]);
   const loves = state.flavors.filter((f) => f.score >= 3.5).slice(0, 6);
   const nopes = [...state.flavors].reverse().filter((f) => f.score < 3.5).slice(0, 6);
-  const reviews = rated.filter((r) => r.note || r.chefStars);
+  const reviews = rated;
 
   return (
     <div className="section stack">
@@ -736,7 +737,7 @@ function Scores({ state, herName }: { state: ClientState; herName: string }) {
               <span className="display" style={{ width: 26 }}>{i + 1}</span>
               <span className="grow" style={{ fontWeight: 800 }}>{d.name}</span>
               <span className="stars-static">{starText(d.avgStars)}</span>
-              <span className="muted">×{d.timesCooked}</span>
+              {d.timesCooked > 0 && <span className="muted">×{d.timesCooked}</span>}
             </div>
           ))}
         </div>
@@ -750,6 +751,7 @@ function Scores({ state, herName }: { state: ClientState; herName: string }) {
           <div key={r.id} className="card pad" style={{ background: i % 3 === 0 ? "#fff" : i % 3 === 1 ? "var(--cream)" : "#ffe9f3", transform: `rotate(${i % 2 ? 0.8 : -0.8}deg)` }}>
             <div className="row">
               <b className="grow">{r.dishName}</b>
+              {r.fromDiary && <span className="pill" style={{ background: "var(--pink)" }}>📓 diary</span>}
               <span className="muted">{timeAgo(r.createdAt)}</span>
             </div>
             <div className="row" style={{ marginTop: 4 }}>
